@@ -1,6 +1,6 @@
 #ifdef  ENABLE_REALTIME
 
-#ifndef USE_REALTIME_POOL
+#ifndef USE_REALTIME_MT
 
 #pragma once
 
@@ -57,11 +57,13 @@ class VRClient
     string m_pcm_path;
 
     size_t m_framelen;
+	int m_mode;
 
 public:
 
 public:
-	VRClient(VRCManager* mgr, string& gearHost, uint16_t gearPort, int gearTimeout, string& fname, string& callid, string& counselcode, uint8_t jobType, uint8_t noc, FileHandler *deliver, /*log4cpp::Category *logger,*/ DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen);
+	// VRClient(VRCManager* mgr, string& gearHost, uint16_t gearPort, int gearTimeout, string& fname, string& callid, string& counselcode, uint8_t jobType, uint8_t noc, FileHandler *deliver, /*log4cpp::Category *logger,*/ DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen);
+	VRClient(VRCManager* mgr, string& gearHost, uint16_t gearPort, int gearTimeout, string& fname, string& callid, string& counselcode, uint8_t jobType, uint8_t noc, FileHandler *deliver, /*log4cpp::Category *logger,*/ DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen, int mode);
 	void finish();
 
 	string& getFname() { return m_sFname; }
@@ -83,6 +85,6 @@ private:
 
 
 
-#endif // USE_REALTIME_POOL
+#endif // USE_REALTIME_MT
 
 #endif // ENABLE_REALTIME

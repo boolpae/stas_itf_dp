@@ -2,7 +2,7 @@
 
 #include "VDClient.h"
 
-#ifdef USE_REALTIME_POOL
+#ifdef USE_REALTIME_MT
 #include "VRClientMT.h"
 #else
 #include "VRClient.h"

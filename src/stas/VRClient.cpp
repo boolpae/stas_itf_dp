@@ -1,6 +1,5 @@
 #ifdef  ENABLE_REALTIME
-#ifndef USE_REALTIME_POOL
-
+#ifndef USE_REALTIME_MT
 
 #include "VRClient.h"
 #include "VRCManager.h"
@@ -131,8 +130,10 @@ enum {
 };
 #endif
 
-VRClient::VRClient(VRCManager* mgr, string& gearHost, uint16_t gearPort, int gearTimeout, string& fname, string& callid, string& counselcode, uint8_t jobType, uint8_t noc, FileHandler *deliver, /*log4cpp::Category *logger,*/ DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen)
-	: m_sGearHost(gearHost), m_nGearPort(gearPort), m_nGearTimeout(gearTimeout), m_sFname(fname), m_sCallId(callid), m_sCounselCode(counselcode), m_nLiveFlag(1), m_cJobType(jobType), m_nNumofChannel(noc), m_deliver(deliver), /*m_Logger(logger),*/ m_s2d(s2d), m_is_save_pcm(is_save_pcm), m_pcm_path(pcm_path), m_framelen(framelen*8)
+// VRClient::VRClient(VRCManager* mgr, string& gearHost, uint16_t gearPort, int gearTimeout, string& fname, string& callid, string& counselcode, uint8_t jobType, uint8_t noc, FileHandler *deliver, /*log4cpp::Category *logger,*/ DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen)
+// 	: m_sGearHost(gearHost), m_nGearPort(gearPort), m_nGearTimeout(gearTimeout), m_sFname(fname), m_sCallId(callid), m_sCounselCode(counselcode), m_nLiveFlag(1), m_cJobType(jobType), m_nNumofChannel(noc), m_deliver(deliver), /*m_Logger(logger),*/ m_s2d(s2d), m_is_save_pcm(is_save_pcm), m_pcm_path(pcm_path), m_framelen(framelen*8)
+VRClient::VRClient(VRCManager* mgr, string& gearHost, uint16_t gearPort, int gearTimeout, string& fname, string& callid, string& counselcode, uint8_t jobType, uint8_t noc, FileHandler *deliver, DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen, int mode)
+	: m_sGearHost(gearHost), m_nGearPort(gearPort), m_nGearTimeout(gearTimeout), m_sFname(fname), m_sCallId(callid), m_sCounselCode(counselcode), m_nLiveFlag(1), m_cJobType(jobType), m_nNumofChannel(noc), m_deliver(deliver), m_s2d(s2d), m_is_save_pcm(is_save_pcm), m_pcm_path(pcm_path), m_framelen(framelen*8), m_mode(mode)
 {
 	m_Mgr = mgr;
 	m_thrd = std::thread(VRClient::thrdMain, this);
@@ -267,6 +268,10 @@ void VRClient::thrdMain(VRClient* client) {
 
         client->m_thrd.detach();
         delete client;
+
+#ifdef USE_XREDIS
+        iconv_close(it);
+#endif
         return;
     }
     
@@ -280,6 +285,10 @@ void VRClient::thrdMain(VRClient* client) {
 
         client->m_thrd.detach();
         delete client;
+
+#ifdef USE_XREDIS
+        iconv_close(it);
+#endif
         return;
     }
     
@@ -308,8 +317,13 @@ void VRClient::thrdMain(VRClient* client) {
             WorkTracer::instance()->insertWork(client->m_sCallId, client->m_cJobType, WorkQueItem::PROCTYPE::R_FREE_WORKER);
             client->m_thrd.detach();
             delete client;
+
+#ifdef USE_XREDIS
+            iconv_close(it);
+#endif
             return;
         }
+        fvad_set_mode(vad, client->m_mode);
 
 #endif // FAD_FUNC
 
@@ -431,7 +445,7 @@ void VRClient::thrdMain(VRClient* client) {
                     }
 
                     if (!vadres && (vBuff[item->spkNo-1].size()>nHeadLen)) {
-                        if (vBuff[item->spkNo-1].size() > 15000) {   // 8000 bytes, 0.5 이하의 음성데이터는 처리하지 않음
+                        if (vBuff[item->spkNo-1].size() > 3200) {   // 3200 bytes, 0.2초 이하의 음성데이터는 처리하지 않음
                             // send buff to gearman
                             if (aDianum[item->spkNo-1] == 0) {
                                 sprintf(buf, "%s_%d|%s|", client->m_sCallId.c_str(), item->spkNo, "FIRS");
@@ -865,6 +879,6 @@ xRedisClient& VRClient::getXRdedisClient()
 
 
 
-#endif // USE_REALTIME_POOL
+#endif // USE_REALTIME_MT
 
 #endif // ENABLE_REALTIME

@@ -313,8 +313,8 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
 
                         nPos1 = nPos2;
                         nPos2 = sValue.find("||", nPos1);
-                        std::string rx(sValue.substr(nPos1, nPos2-nPos1));    // 고객
-                        std::string tx(sValue.substr(nPos2+2));     // 상담원
+                        std::string tx(sValue.substr(nPos1, nPos2-nPos1));    // 고객
+                        std::string rx(sValue.substr(nPos2+2));     // 상담원
 
                         // MLF 파일 저장 옵션
                         if (client->m_bMakeMLF) {
@@ -331,7 +331,7 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                             mlfFilename = client->m_sResultPath + item->getFilename() + "_l.mlf";
                             std::ofstream mlfLFile(mlfFilename, std::ios::out | std::ios::app);
 			                if (mlfLFile.is_open()) {
-                                mlfLFile << rx;
+                                mlfLFile << tx;
                                 mlfLFile << std::endl;
 				                mlfLFile.close();
                             }
@@ -407,7 +407,7 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                                                 // to STTDeliver(file), FullText
                                                 if (FileHandler) {
                                                     //FileHandler->insertSTT(item->getCallId(), strs[2], 0, std::stoi(strs[0].c_str()+4), std::stoi(strs[1].c_str()+4));
-                                                    FileHandler->insertSTT(item->getCallId(), strs[2], item->getCallId());
+                                                    FileHandler->insertSTT(item->getCallId(), strs[2], item->getCallId()+"_r");
                                                 }
                                             }
                                         }
@@ -430,7 +430,7 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                                                 // to STTDeliver(file), FullText
                                                 if (FileHandler) {
                                                     //FileHandler->insertSTT(item->getCallId(), strs[2], 0, std::stoi(strs[0].c_str()+4), std::stoi(strs[1].c_str()+4));
-                                                    FileHandler->insertSTT(item->getCallId(), strs[2], item->getCallId());
+                                                    FileHandler->insertSTT(item->getCallId(), strs[2], item->getCallId()+"_l");
                                                 }
                                             }
                                         }

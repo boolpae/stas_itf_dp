@@ -1,6 +1,6 @@
 #ifdef  ENABLE_REALTIME
 
-#ifdef USE_REALTIME_POOL
+#ifdef USE_REALTIME_MT
 
 #pragma once
 
@@ -127,6 +127,6 @@ private:
 
 
 
-#endif // USE_REALTIME_POOL
+#endif // USE_REALTIME_MT
 
 #endif // ENABLE_REALTIME

@@ -1,5 +1,5 @@
 #ifdef  ENABLE_REALTIME
-#ifdef USE_REALTIME_POOL
+#ifdef USE_REALTIME_MT
 
 #include "VRClientMT.h"
 #include "VRCManager.h"

@@ -2,7 +2,7 @@
 
 #include "VRCManager.h"
 
-#ifdef USE_REALTIME_POOL
+#ifdef USE_REALTIME_MT
 #include "VRClientMT.h"
 #else
 #include "VRClient.h"
@@ -171,7 +171,7 @@ bool VRCManager::getGearmanFnames(std::vector<std::string> &vFnames)
 
 	disconnectGearman();
 	
-#ifdef USE_REALTIME_POOL
+#if 1 //USE_REALTIME_MT //def USE_REALTIME_POOL
 	getFnamesFromString4MT(sRes, vFnames);
 #else
 	getFnamesFromString(sRes, vFnames);
