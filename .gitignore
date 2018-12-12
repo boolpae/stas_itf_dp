@@ -1,0 +1,12 @@
+.*
+!.gitignore
+~*
+Debug/
+logs/
+bin/
+input/
+*.stt
+core
+stas.conf
+nohup.out
+itf_stas.pid
