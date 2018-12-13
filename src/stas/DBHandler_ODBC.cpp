@@ -50,6 +50,11 @@ bool DBHandler::m_bThrdMain = false;
 bool DBHandler::m_bThrdUpdate = false;
 #endif
 
+#ifdef USE_FIND_KEYWORD
+std::list< std::string > DBHandler::m_lKeywords;
+bool DBHandler::m_bThrdUpdateKeywords = false;
+#endif
+
 DBHandler::DBHandler(std::string dsn,int connCount)
 : m_sDsn(dsn), m_nConnCount(connCount), m_bLiveFlag(true), m_bInterDBUse(false)
 {
@@ -68,6 +73,9 @@ DBHandler::~DBHandler()
 #ifdef USE_UPDATE_POOL
         || !m_bThrdUpdate
 #endif
+#ifdef USE_FIND_KEYWORD
+        || !m_bThrdUpdateKeywords
+#endif
         ) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
@@ -84,6 +92,11 @@ DBHandler::~DBHandler()
 #ifdef USE_UPDATE_POOL
     if (m_thrdUpdate.joinable()) m_thrdUpdate.detach();
 #endif
+
+#ifdef USE_FIND_KEYWORD
+    if (m_thrdUpdateKeywords.joinable()) m_thrdUpdateKeywords.detach();
+#endif
+
     DBHandler::m_instance = nullptr;
 	m_Logger->debug("DBHandler Destructed.\n");
 }
@@ -113,6 +126,10 @@ void DBHandler::thrdMain(DBHandler * s2d)
     SQLRETURN retcode;
 
     SQLSMALLINT NumParams;
+
+#ifdef USE_FIND_KEYWORD
+    std::list< std::string > lKeywords;
+#endif
 
     logger = config->getLogger();
     PConnSet connSet = s2d->m_pSolDBConnPool->getConnection();//ConnectionPool_getConnection(s2d->m_pool);
@@ -258,6 +275,14 @@ void DBHandler::thrdMain(DBHandler * s2d)
 #endif
             }
             retcode = SQLCloseCursor(connSet->stmt);
+
+#ifdef USE_FIND_KEYWORD
+            lKeywords.clear();
+            findKeywords( utf_buf, lKeywords );
+            if ( lKeywords.size() ) {
+
+            }
+#endif
             if (utf_buf) free(utf_buf);
 			delete item;
 		}
@@ -377,6 +402,101 @@ void DBHandler::maskingSTTValue(char *value)
 
 }
 
+#ifdef USE_FIND_KEYWORD
+void DBHandler::thrdUpdateKeywords(DBHandler *s2d)
+{
+    log4cpp::Category *logger;
+    int nSleepedTime=0;
+    int nSleepTime=5;
+
+    time_t rawtime;
+    struct tm * timeinfo;
+    char timebuff [32];
+    int ret=0;
+    char sqlbuff[512];
+    SQLRETURN retcode;
+
+    logger = config->getLogger();
+    PConnSet connSet = s2d->m_pSolDBConnPool->getConnection();
+
+    m_lKeywords.clear();
+
+	while (s2d->m_bLiveFlag) {
+#if 0
+		while (!s2d->m_qUpdateInfoQue.empty()) {
+			g = new std::lock_guard<std::mutex>(s2d->m_mxUpdateQue);
+			item = s2d->m_qUpdateInfoQue.front();
+			s2d->m_qUpdateInfoQue.pop();
+			delete g;
+
+            time (&rawtime);
+            timeinfo = localtime (&rawtime);
+
+            strftime (timebuff,sizeof(timebuff),"%F %T",timeinfo);
+            //sprintf(sqlbuff, "UPDATE TBL_JOB_INFO SET STATE='%c' WHERE CALL_ID='%s' AND CS_CODE='%s'",
+            //    state, callid.c_str(), counselorcode.c_str());
+            if (item->getErrCode().size()) {
+                // sprintf(sqlbuff, "UPDATE %s SET STATE='%c',ERR_CD='%s' WHERE CALL_ID='%s' AND RCD_TP='%s'",
+                //     tbName, state, errcode, callid.c_str(), rxtx.c_str());
+                sprintf(sqlbuff, "CALL PROC_JOB_STATISTIC_DAILY('%s','%s','%s','%d','%d','%d','%c','%s','%s')",
+                    item->getCallId().c_str(), item->getRxTx().c_str(), item->getServerName().c_str(), item->getPlayLength(), item->getFileSize(), item->getWorkingTime(), item->getState(), item->getErrCode().c_str(), timebuff);
+            }
+            else {
+                // sprintf(sqlbuff, "UPDATE %s SET STATE='%c',FILE_SIZE=%d,REC_LENGTH=%d,WORKING_TIME=%d WHERE CALL_ID='%s' AND RCD_TP='%s'",
+                //     tbName, state, fsize, plen, wtime, callid.c_str(), rxtx.c_str());
+                sprintf(sqlbuff, "CALL PROC_JOB_STATISTIC_DAILY('%s','%s','%s','%d','%d','%d','%c','','%s')",
+                    item->getCallId().c_str(), item->getRxTx().c_str(), item->getServerName().c_str(), item->getPlayLength(), item->getFileSize(), item->getWorkingTime(), item->getState(), timebuff);
+            }
+
+            retcode = SQLExecDirect(connSet->stmt, (SQLCHAR *)sqlbuff, SQL_NTS);
+
+            if SQL_SUCCEEDED(retcode) {
+                logger->debug("DBHandler::thrdUpdateKeywords() - Query<%s>", sqlbuff);
+            }
+            else {
+                int odbcret = extract_error("DBHandler::thrdUpdateKeywords() - SQLExecDirect()", connSet->stmt, SQL_HANDLE_STMT);
+                if (odbcret == 2006) {
+                    s2d->m_pSolDBConnPool->reconnectConnection(connSet);
+                }
+                ret = 1;
+            }
+			delete item;
+		}
+#endif
+
+        if ( nSleepedTime > 60000 )
+        {   // 60초, 즉 1분 간격으로 keyworkds 리스트 업데이트
+            nSleepedTime = 0;
+        }
+		std::this_thread::sleep_for(std::chrono::milliseconds(nSleepTime));
+        nSleepedTime += nSleepTime;
+	}
+
+    if (DBHandler::getInstance() && connSet) {
+        retcode = SQLCloseCursor(connSet->stmt);
+        s2d->m_pSolDBConnPool->restoreConnection(connSet);
+    }
+
+    m_lKeywords.clear();
+    m_bThrdUpdateKeywords = false;
+    logger->debug("DBHandler::thrdUpdateKeywords() finish!\n");
+}
+
+void DBHandler::findKeywords(char *value, std::list< std::string > &keywords)
+{
+    std::list< std::string >::iterator iter;
+
+    for(iter = m_lKeywords.begin(); iter != m_lKeywords.end(); iter++ )
+    {
+        // 만약 검색된 keyword가 발견되면 keywords 리스트에 입력한다.
+        if ( strstr(value, *iter.c_str()) )
+        {
+            keywords.push_back( *iter );
+        }
+    }
+}
+#endif
+
 DBHandler* DBHandler::instance(std::string dsn, std::string id, std::string pw, int connCount=10)
 {
     if (m_instance) return m_instance;
@@ -393,6 +513,12 @@ DBHandler* DBHandler::instance(std::string dsn, std::string id, std::string pw, 
         m_instance->m_thrdUpdate = std::thread(DBHandler::thrdUpdate, m_instance);
         m_bThrdUpdate = true;
 #endif
+
+#ifdef USE_FIND_KEYWORD
+        m_instance->m_thrdUpdateKeywords = std::thread(DBHandler::thrdUpdateKeywords, m_instance);
+        m_bThrdUpdateKeywords = true;
+#endif
+
     }
     else
     {

@@ -9,6 +9,10 @@
 #include <queue>
 #include <vector>
 
+#ifdef USE_FIND_KEYWORD
+#include <list>
+#endif
+
 #include <log4cpp/Category.hh>
 
 class ItfOdbcPool;
@@ -148,6 +152,11 @@ private:
 
     static void maskingSTTValue(char *value);
 
+#ifdef USE_FIND_KEYWORD
+    static void thredUpdateKeywords(DBHandler* handle);
+    static void findKeywords(char *value, std::list< std::string > &keywords);
+#endif
+
 private:
     std::string m_sDsn;
     int m_nConnCount;
@@ -162,6 +171,12 @@ private:
     std::thread m_thrdUpdate;
     mutable std::mutex m_mxUpdateQue;
 #endif
+
+#ifdef USE_FIND_KEYWORD
+    static std::list< std::string > m_lKeywords;
+    std::thread m_thrdUpdateKeywords;
+#endif
+
 	mutable std::mutex m_mxQue;
 	mutable std::mutex m_mxDb;
     log4cpp::Category *m_Logger;
@@ -174,6 +189,10 @@ private:
     static bool m_bThrdMain;
 #ifdef USE_UPDATE_POOL
     static bool m_bThrdUpdate;
+#endif
+
+#ifdef USE_FIND_KEYWORD
+    static bool m_bThrdUpdateKeywords;
 #endif
 
     bool m_bUseMask;
