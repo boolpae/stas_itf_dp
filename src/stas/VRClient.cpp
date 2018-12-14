@@ -140,7 +140,7 @@ VRClient::VRClient(VRCManager* mgr, string& gearHost, uint16_t gearPort, int gea
 	//thrd.detach();
 	//printf("\t[DEBUG] VRClinet Constructed.\n");
     m_Logger = config->getLogger();
-    m_Logger->debug("VRClinet Constructed.");
+    m_Logger->debug("VRClinet Constructed(%s)(%s)(%d).", m_sCallId.c_str(), m_sFname.c_str(), m_mode);
 }
 
 
@@ -457,7 +457,7 @@ void VRClient::thrdMain(VRClient* client) {
                                 vBuff[item->spkNo-1][i] = buf[i];
                             }
                             //client->m_Logger->debug("VRClient::thrdMain(%d, %d, %s)(%s) - send buffer buff_len(%lu), spos(%lu), epos(%lu)", nHeadLen, item->spkNo, buf, client->m_sCallId.c_str(), vBuff[item->spkNo-1].size(), sframe[item->spkNo-1], eframe[item->spkNo-1]);
-                            value= gearman_client_do(gearClient, client->m_sFname.c_str(), NULL, 
+                            value= gearman_client_do(gearClient, "vr_realtime"/*client->m_sFname.c_str()*/, NULL, 
                                                             (const void*)&vBuff[item->spkNo-1][0], vBuff[item->spkNo-1].size(),
                                                             &result_size, &rc);
                                                             
@@ -664,7 +664,7 @@ void VRClient::thrdMain(VRClient* client) {
                             vBuff[item->spkNo-1].push_back(buf[i]);
                         }
                     }
-                    value= gearman_client_do(gearClient, client->m_sFname.c_str(), NULL, 
+                    value= gearman_client_do(gearClient, "vr_realtime"/*client->m_sFname.c_str()*/, NULL, 
                                                     (const void*)&vBuff[item->spkNo-1][0], vBuff[item->spkNo-1].size(),
                                                     &result_size, &rc);
                     if (gearman_success(rc))
