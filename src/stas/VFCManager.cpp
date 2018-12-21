@@ -28,7 +28,7 @@ VFCManager::VFCManager(int geartimeout/*, log4cpp::Category *logger*/)
 {
 	//printf("\t[DEBUG] VFCManager Constructed.\n");
     m_Logger = config->getLogger();
-    m_bMakeMLF = config->getConfig("stt_result.make_mlf", "false").compare("false");
+    m_bMakeMLF = !config->getConfig("stt_result.make_mlf", "false").compare("false");
     m_sResultPath = config->getConfig("stt_result.path", "./stt_result");
     m_Logger->debug("VFCManager Constructed.");
 }

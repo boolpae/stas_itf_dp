@@ -81,6 +81,7 @@ void FileHandler::thrdMain(FileHandler * dlv)
 			}
 			std::ofstream sttresult(sttFilename, std::ios::out | std::ios::app);
 			if (sttresult.is_open()) {
+#if 0
                 if (item->getJobType() == 'R') {
                     if (item->getSpkNo() == 1) {
                         sttresult << "<< Counselor >> : ";
@@ -95,6 +96,7 @@ void FileHandler::thrdMain(FileHandler * dlv)
                     */
                     sttresult << std::to_string(item->getBpos()) << " - " << std::to_string(item->getEpos()) << std::endl;
                 }
+#endif
 				sttresult << ((ret == -1) ? item->getSTTValue() : utf_buf);//item->getSTTValue();
                 /*
                 if (item->getJobType() == 'R') {

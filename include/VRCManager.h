@@ -62,7 +62,7 @@ public:
 	static VRCManager* instance(const std::string gearHostIp, const uint16_t gearHostPort, int geartimout, FileHandler *deliver, DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen, int mode);
 	static void release();
 
-	int16_t requestVRC(string& callid, string& counselcode, uint8_t jobType, uint8_t noc);
+	int16_t requestVRC(string& callid, string& counselcode, time_t &startT, uint8_t jobType, uint8_t noc=1);
 	void removeVRC(string callid);
 	void removeAllVRC();
 

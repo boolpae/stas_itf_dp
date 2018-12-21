@@ -132,10 +132,11 @@ enum {
 
 // VRClient::VRClient(VRCManager* mgr, string& gearHost, uint16_t gearPort, int gearTimeout, string& fname, string& callid, string& counselcode, uint8_t jobType, uint8_t noc, FileHandler *deliver, /*log4cpp::Category *logger,*/ DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen)
 // 	: m_sGearHost(gearHost), m_nGearPort(gearPort), m_nGearTimeout(gearTimeout), m_sFname(fname), m_sCallId(callid), m_sCounselCode(counselcode), m_nLiveFlag(1), m_cJobType(jobType), m_nNumofChannel(noc), m_deliver(deliver), /*m_Logger(logger),*/ m_s2d(s2d), m_is_save_pcm(is_save_pcm), m_pcm_path(pcm_path), m_framelen(framelen*8)
-VRClient::VRClient(VRCManager* mgr, string& gearHost, uint16_t gearPort, int gearTimeout, string& fname, string& callid, string& counselcode, uint8_t jobType, uint8_t noc, FileHandler *deliver, DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen, int mode)
+VRClient::VRClient(VRCManager* mgr, string& gearHost, uint16_t gearPort, int gearTimeout, string& fname, string& callid, string& counselcode, uint8_t jobType, uint8_t noc, FileHandler *deliver, DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen, int mode, time_t startT)
 	: m_sGearHost(gearHost), m_nGearPort(gearPort), m_nGearTimeout(gearTimeout), m_sFname(fname), m_sCallId(callid), m_sCounselCode(counselcode), m_nLiveFlag(1), m_cJobType(jobType), m_nNumofChannel(noc), m_deliver(deliver), m_s2d(s2d), m_is_save_pcm(is_save_pcm), m_pcm_path(pcm_path), m_framelen(framelen*8), m_mode(mode)
 {
 	m_Mgr = mgr;
+    m_tStart = startT;
 	m_thrd = std::thread(VRClient::thrdMain, this);
 	//thrd.detach();
 	//printf("\t[DEBUG] VRClinet Constructed.\n");
@@ -771,6 +772,9 @@ void VRClient::thrdMain(VRClient* client) {
 
                         if (client->m_s2d) {
                             auto t2 = std::chrono::high_resolution_clock::now();
+                            char timebuff [32];
+                            struct tm * timeinfo = localtime(&client->m_tStart);
+                            strftime (timebuff,sizeof(timebuff),"%Y-%m-%d %H:%M:%S",timeinfo);
 
 #ifdef USE_XREDIS
                             int64_t zCount=0;
@@ -779,7 +783,7 @@ void VRClient::thrdMain(VRClient* client) {
                             }
 #endif
                             client->m_s2d->updateCallInfo(client->m_sCallId, true);
-                            client->m_s2d->updateTaskInfo(client->m_sCallId, std::string("MN"), client->m_sCounselCode, 'Y', totalVLen, totalVLen/16000, std::chrono::duration_cast<std::chrono::seconds>(t2-t1).count(), "TBL_JOB_INFO", "", svr_nm.c_str());
+                            client->m_s2d->updateTaskInfo(client->m_sCallId, std::string(timebuff), std::string("MN"), client->m_sCounselCode, 'Y', totalVLen, totalVLen/16000, std::chrono::duration_cast<std::chrono::seconds>(t2-t1).count(), 0, "TBL_JOB_INFO", "", svr_nm.c_str());
                         }
 #if 0
                         HAManager::getInstance()->deleteSyncItem(client->m_sCallId);

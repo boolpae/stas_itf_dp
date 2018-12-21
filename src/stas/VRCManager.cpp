@@ -317,7 +317,7 @@ void VRCManager::release()
 }
 
 // return: 성공(0), 실패(0이 아닌 값)
-int16_t VRCManager::requestVRC(string& callid, string& counselcode, uint8_t jobType, uint8_t noc = 1)
+int16_t VRCManager::requestVRC(string& callid, string& counselcode, time_t &startT, uint8_t jobType, uint8_t noc)
 {
 	int16_t res = 0;
 	VRClient* client;
@@ -346,7 +346,8 @@ int16_t VRCManager::requestVRC(string& callid, string& counselcode, uint8_t jobT
 	}
 
 	if (iter != vFnames.end()) {
-		client = new VRClient(ms_instance, this->m_sGearHost, this->m_nGearPort, this->m_GearTimeout, *iter, callid, counselcode, jobType, noc, m_deliver, /*m_Logger,*/ m_s2d, m_is_save_pcm, m_pcm_path, m_framelen, m_mode); // or VRClient(this);
+		startT = time(NULL);
+		client = new VRClient(ms_instance, this->m_sGearHost, this->m_nGearPort, this->m_GearTimeout, *iter, callid, counselcode, jobType, noc, m_deliver, /*m_Logger,*/ m_s2d, m_is_save_pcm, m_pcm_path, m_framelen, m_mode, startT); // or VRClient(this);
 
 		if (client) {
 			std::lock_guard<std::mutex> g(m_mxMap);
@@ -437,7 +438,7 @@ int VRCManager::addVRC(string callid, string counselcode, string fname, uint8_t 
 	int16_t res = 0;
 	VRClient* client;
 
-    client = new VRClient(this, this->m_sGearHost, this->m_nGearPort, this->m_GearTimeout, fname, callid, counselcode, jobtype, noc, m_deliver, /*m_Logger,*/ m_s2d, m_is_save_pcm, m_pcm_path, m_framelen, m_mode); // or VRClient(this);
+    client = new VRClient(this, this->m_sGearHost, this->m_nGearPort, this->m_GearTimeout, fname, callid, counselcode, jobtype, noc, m_deliver, /*m_Logger,*/ m_s2d, m_is_save_pcm, m_pcm_path, m_framelen, m_mode, time(NULL)); // or VRClient(this);
 
     if (client) {
         std::lock_guard<std::mutex> g(m_mxMap);

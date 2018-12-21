@@ -101,11 +101,12 @@ void CallExecutor::thrdMain(CallExecutor* exe)
                 sCallId = std::string(cs->getCallId());
 
 				if (cs->getPacketFlag() == 'B') {
+					time_t startT;
 					WorkTracer::instance()->insertWork(sCallId, 'R', WorkQueItem::PROCTYPE::R_BEGIN_PROC);
 					// VDC, VRC 요청
 					// 1. VRC 요청 : 성공 시 VDC 요청, 실패 패킷 생성하여 sendto
 					WorkTracer::instance()->insertWork(sCallId, 'R', WorkQueItem::PROCTYPE::R_REQ_WORKER);
-                    if ((resReq = exe->m_vrcm->requestVRC(sCallId, sCounselorCode, 'R', cs->getUdpCnt()))) {
+                    if ((resReq = exe->m_vrcm->requestVRC(sCallId, sCounselorCode, startT, 'R', cs->getUdpCnt()))) {
 						WorkTracer::instance()->insertWork(sCallId, 'R', WorkQueItem::PROCTYPE::R_RES_WORKER);
 
 						if (resReq == 1) {
@@ -143,7 +144,7 @@ void CallExecutor::thrdMain(CallExecutor* exe)
 								else
 									exe->m_st2db->insertCallInfo(sCounselorCode, sCallId);
 
-								exe->m_st2db->insertTaskInfoRT(config->getConfig("stas.wavpath", "/home/stt/Smart-VR/input"), sCallId, sCallId, sCounselorCode);
+								exe->m_st2db->insertTaskInfoRT(config->getConfig("stas.wavpath", "/home/stt/Smart-VR/input"), sCallId, sCallId, sCounselorCode, startT);
 									
                             }
 							WorkTracer::instance()->insertWork(sCallId, 'R', WorkQueItem::PROCTYPE::R_RES_CHANNEL, 1);

@@ -67,14 +67,14 @@ void Scheduler::thrdFuncScheduler(Scheduler *schd, VFCManager *vfcm)
         // 새로운 task를 VFCManager의 큐에 등록
 
         // Self테이블
-        if (schd->m_sttdb->getTaskInfo(v, vfcm->getAvailableCount(), "TBL_JOB_SELF_INFO") > 0) {
+        if (schd->m_sttdb->getTaskInfo2(v, vfcm->getAvailableCount(), "TBL_JOB_SELF_INFO") > 0) {
             for( std::vector< JobInfoItem* >::iterator iter = v.begin(); iter != v.end(); iter++) {
                 item = *iter;
 
                 logger->debug("thrdFuncScheduler (%s, %s)", item->getPath().c_str(), item->getFilename().c_str());
                 // put item to VFCMgr's Queue
                 if (schd->m_vfcmgr->pushItem(item/*item->getPath()+"/"+item->getFilename()*/) > 0) {
-                    schd->m_sttdb->updateTaskInfo4Schd(item->getCallId(), item->getRxTxType(), item->getTableName());
+                    schd->m_sttdb->updateTaskInfo4Schd(item->getCallId(), item->m_regdate, item->getRxTxType(), item->getTableName());
                 }
             }
 
@@ -82,14 +82,14 @@ void Scheduler::thrdFuncScheduler(Scheduler *schd, VFCManager *vfcm)
         }
 
         // Retry테이블
-        if (schd->m_sttdb->getTaskInfo(v, vfcm->getAvailableCount(), "TBL_JOB_RETRY_INFO") > 0) {
+        if (schd->m_sttdb->getTaskInfo2(v, vfcm->getAvailableCount(), "TBL_JOB_RETRY_INFO") > 0) {
             for( std::vector< JobInfoItem* >::iterator iter = v.begin(); iter != v.end(); iter++) {
                 item = *iter;
 
                 logger->debug("thrdFuncScheduler (%s, %s)", item->getPath().c_str(), item->getFilename().c_str());
                 // put item to VFCMgr's Queue
                 if (schd->m_vfcmgr->pushItem(item/*item->getPath()+"/"+item->getFilename()*/) > 0) {
-                    schd->m_sttdb->updateTaskInfo4Schd(item->getCallId(), item->getRxTxType(), item->getTableName());
+                    schd->m_sttdb->updateTaskInfo4Schd(item->getCallId(), item->m_regdate, item->getRxTxType(), item->getTableName());
                 }
             }
 
@@ -104,7 +104,7 @@ void Scheduler::thrdFuncScheduler(Scheduler *schd, VFCManager *vfcm)
                 logger->debug("thrdFuncScheduler (%s, %s)", item->getPath().c_str(), item->getFilename().c_str());
                 // put item to VFCMgr's Queue
                 if (schd->m_vfcmgr->pushItem(item/*item->getPath()+"/"+item->getFilename()*/) > 0) {
-                    schd->m_sttdb->updateTaskInfo4Schd(item->getCallId(), item->getRxTxType(), item->getTableName());
+                    schd->m_sttdb->updateTaskInfo4Schd(item->getCallId(), item->m_regdate, item->getRxTxType(), item->getTableName());
                 }
             }
 
