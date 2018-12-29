@@ -20,6 +20,7 @@
 #include "VFCManager.h"
 #include "Notifier.h"
 #include "Scheduler.h"
+#include "RedisHandler.h"
 
 #include <log4cpp/Category.hh>
 #include <log4cpp/Appender.hh>
@@ -159,6 +160,16 @@ int main(int argc, const char** argv)
     
     if (!config->getConfig("stt_result.use", "false").compare("true")) {
         deliver = FileHandler::instance(config->getConfig("stt_result.path", "./stt_result")/*, logger*/);
+    }
+
+    // RedisHandler 활성화 옵션 체크
+    if (!RedisHandler::instance()) {
+        logger->error("MAIN - ERROR (Failed to get RedisHandler instance)");
+        VDCManager::release();
+        FileHandler::release();
+        WorkTracer::release();
+        delete config;
+        return -1;
     }
 
 #ifdef ENABLE_REALTIME

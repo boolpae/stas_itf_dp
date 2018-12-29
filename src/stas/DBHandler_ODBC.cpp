@@ -839,6 +839,14 @@ int DBHandler::insertTaskInfo(std::string downloadPath, std::string filename, st
             m_Logger->debug("INSERT INTO TBL_JOB_INFO (CALL_ID,SV_NM,PATH_NM,FILE_NM,REG_DTM,STATE) VALUES ('%s','DEFAULT','%s','%s','%s','I')",
                 callId.c_str(), downloadPath.c_str(), filename.c_str(),timebuff);
 #endif
+
+#ifdef USE_REDIS_POOL
+            // check config-option
+            // 이 옵션이 설정된 경우 Redis에도 작업 요청을 입력한다.
+            // 채널 이름은...REQ_FILE_STT, LPUSH
+            // Protocol...JSON
+#endif
+
         }
         else {
             int odbcret = extract_error("DBHandler::insertTaskInfo() - SQLExecDirect()", connSet->stmt, SQL_HANDLE_STMT);
@@ -1145,6 +1153,13 @@ int DBHandler::getTaskInfo(std::vector< JobInfoItem* > &v, int availableCount, c
     char rxtx[8];
     int siCallId, siCCode, siPath, siFilename, siRxtx, siRegdate;
 
+#ifdef USE_REDIS_POOL
+        // check config-option
+        // getTaskInfo2(), getTaskInfo()
+        // 이 옵션이 설정된 경우 Redis에서만 값을 확인하고 리턴한다.
+        // Redis 채널 이름은...REQ_FILE_STT, LLEN, RPOP
+        return 0;
+#endif
     //m_Logger->debug("BEFORE DBHandler::getTaskInfo - ConnectionPool_size(%d), ConnectionPool_active(%d), availableCount(%d)", ConnectionPool_size(m_pool), ConnectionPool_active(m_pool), availableCount);
     
     if (connSet)
@@ -1212,6 +1227,12 @@ int DBHandler::getTaskInfo2(std::vector< JobInfoItem* > &v, int availableCount, 
     char rxtx[8];
     int siCallId, siPNo, siCCode, siPath, siFilename, siRxtx, siRegdate;
 
+#ifdef USE_REDIS_POOL
+        // check config-option
+        // getTaskInfo2(), getTaskInfo()
+        // Redis 채널 이름은...REQ_FILE_STT, LLEN, RPOP
+        return 0;
+#endif
     //m_Logger->debug("BEFORE DBHandler::getTaskInfo - ConnectionPool_size(%d), ConnectionPool_active(%d), availableCount(%d)", ConnectionPool_size(m_pool), ConnectionPool_active(m_pool), availableCount);
     
     if (connSet)

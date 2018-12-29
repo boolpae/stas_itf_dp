@@ -43,6 +43,8 @@
 #include <fvad.h>
 
 #ifdef USE_XREDIS
+#include "RedisHandler.h"
+
 #include <iconv.h>
 
 #include "rapidjson/document.h"     // rapidjson's DOM-style API
@@ -195,7 +197,13 @@ void VRClient::thrdMain(VRClient* client) {
     
     char buf[BUFLEN];
     uint16_t nHeadLen=0;
-    
+
+    char timebuff [32];
+    struct tm * timeinfo = localtime(&client->m_tStart);
+    strftime (timebuff,sizeof(timebuff),"%Y%m%d%H:%M:%S",timeinfo);
+    std::string filename = client->m_pcm_path + "/" + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId;// + std::string("_l.wav");
+    std::ofstream pcmFile;
+
 #ifdef FAD_FUNC
     uint8_t *vpBuf = NULL;
     size_t posBuf = 0;
@@ -241,9 +249,10 @@ void VRClient::thrdMain(VRClient* client) {
         wHdr[i].Data.ChunkSize = 0;
 
         if (client->m_is_save_pcm) {
-            std::string spker = (i == 0)?std::string("r"):std::string("l");
-            std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_") + /*std::to_string(client->m_nNumofChannel)*/spker + std::string(".wav");
-            std::ofstream pcmFile;
+            std::string spker = (i == 0)?std::string("_r.wav"):std::string("_l.wav");
+            // std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_") + /*std::to_string(client->m_nNumofChannel)*/spker + std::string(".wav");
+            // std::ofstream pcmFile;
+            filename += spker;
 
             pcmFile.open(filename, ios::out | ios::trunc | ios::binary);
             if (pcmFile.is_open()) {
@@ -403,9 +412,10 @@ void VRClient::thrdMain(VRClient* client) {
 #endif // FAD_FUNC
 
                 if (client->m_is_save_pcm) {
-                    std::string spker = (item->spkNo == 1)?std::string("r"):std::string("l");
-                    std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_") + /*std::to_string(client->m_nNumofChannel)*/spker + std::string(".wav");
-                    std::ofstream pcmFile;
+                    std::string spker = (item->spkNo == 1)?std::string("_r.wav"):std::string("_l.wav");
+                    // std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_") + /*std::to_string(client->m_nNumofChannel)*/spker + std::string(".wav");
+                    // std::ofstream pcmFile;
+                    filename += spker;
 
                     pcmFile.open(filename, ios::out | ios::app | ios::binary);
                     if (pcmFile.is_open()) {
@@ -772,8 +782,8 @@ void VRClient::thrdMain(VRClient* client) {
 
                         if (client->m_s2d) {
                             auto t2 = std::chrono::high_resolution_clock::now();
-                            char timebuff [32];
-                            struct tm * timeinfo = localtime(&client->m_tStart);
+                            // char timebuff [32];
+                            // struct tm * timeinfo = localtime(&client->m_tStart);
                             strftime (timebuff,sizeof(timebuff),"%Y-%m-%d %H:%M:%S",timeinfo);
 
 #ifdef USE_XREDIS
@@ -795,9 +805,10 @@ void VRClient::thrdMain(VRClient* client) {
 #endif
                         if (client->m_is_save_pcm) {
                             for (int i=0; i<2; i++) {
-                                std::string spker = (i == 0)?std::string("r"):std::string("l");
-                                std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_") + /*std::to_string(client->m_nNumofChannel)*/spker + std::string(".wav");
-                                std::ofstream pcmFile;
+                                std::string spker = (i == 0)?std::string("_r.wav"):std::string("_l.wav");
+                                // std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_") + /*std::to_string(client->m_nNumofChannel)*/spker + std::string(".wav");
+                                // std::ofstream pcmFile;
+                                filename += spker;
 
                                 wHdr[i].Riff.ChunkSize = totalVoiceDataLen[i] + sizeof(WAVE_HEADER) - 8;
                                 wHdr[i].Data.ChunkSize = totalVoiceDataLen[i];
@@ -873,7 +884,8 @@ void VRClient::insertQueItem(QueItem* item)
 #ifdef USE_XREDIS
 xRedisClient& VRClient::getXRdedisClient()
 {
-    return m_Mgr->getRedisClient();
+    // return m_Mgr->getRedisClient();
+    return RedisHandler::instance()->getRedisClient();
 }
 #endif
 

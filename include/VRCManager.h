@@ -20,6 +20,8 @@
 
 #include <log4cpp/Category.hh>
 
+#undef USE_XREDIS
+
 #ifdef USE_XREDIS
 #include "xRedisClient.h"
 

@@ -81,6 +81,7 @@ void CallExecutor::thrdMain(CallExecutor* exe)
 	std::vector< uint16_t > vPorts;
 	std::string sCounselorCode;
 	std::string sCallId;
+	std::string sDownloadPath = config->getConfig("stas.wavpath", "/home/stt/Smart-VR/input");
 	uint16_t resReq;
 
 	ms_bThrdRun = true;
@@ -144,7 +145,10 @@ void CallExecutor::thrdMain(CallExecutor* exe)
 								else
 									exe->m_st2db->insertCallInfo(sCounselorCode, sCallId);
 
-								exe->m_st2db->insertTaskInfoRT(config->getConfig("stas.wavpath", "/home/stt/Smart-VR/input"), sCallId, sCallId, sCounselorCode, startT);
+								std::string ext = ".wav";
+								std::string filename = sCallId + ext;
+								
+								exe->m_st2db->insertTaskInfoRT(sDownloadPath, filename, sCallId, sCounselorCode, startT);
 									
                             }
 							WorkTracer::instance()->insertWork(sCallId, 'R', WorkQueItem::PROCTYPE::R_RES_CHANNEL, 1);

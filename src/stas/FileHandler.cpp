@@ -26,17 +26,22 @@ FileHandler::~FileHandler()
 	m_Logger->debug("FileHandler Destructed.");
 }
 
+// #define ENC_UTF8
+
 void FileHandler::thrdMain(FileHandler * dlv)
 {
 	std::lock_guard<std::mutex> *g;// (m_mxQue);
 	STTQueItem* item;
 	std::string sttFilename;
     int ret=0;
+
+#ifdef ENC_UTF8
     char *utf_buf = NULL;
     size_t in_size, out_size;
     iconv_t it;
     char *input_buf_ptr = NULL;
     char *output_buf_ptr = NULL;
+#endif
 
 	while (dlv->m_bLiveFlag) {
 		while (!dlv->m_qSttQue.empty()) {
@@ -45,6 +50,7 @@ void FileHandler::thrdMain(FileHandler * dlv)
 			dlv->m_qSttQue.pop();
 			delete g;
 
+#ifdef ENC_UTF8
             in_size = item->getSTTValue().size();
             out_size = item->getSTTValue().size() * 2;
             utf_buf = (char *)malloc(out_size);
@@ -65,7 +71,7 @@ void FileHandler::thrdMain(FileHandler * dlv)
                 utf_buf = nullptr;
                 ret = -1;
             }
-
+#endif
 			// item으로 로직 수행
 			if (item->getJobType() == 'R') {
 				sttFilename = dlv->m_sResultPath + "/" + item->getCallId();
@@ -97,7 +103,12 @@ void FileHandler::thrdMain(FileHandler * dlv)
                     sttresult << std::to_string(item->getBpos()) << " - " << std::to_string(item->getEpos()) << std::endl;
                 }
 #endif
+
+#ifdef ENC_UTF8
 				sttresult << ((ret == -1) ? item->getSTTValue() : utf_buf);//item->getSTTValue();
+#else
+                sttresult << item->getSTTValue() ;//item->getSTTValue();
+#endif
                 /*
                 if (item->getJobType() == 'R') {
                     sttresult << std::to_string(item->getEpos()) << std::endl;
@@ -106,7 +117,9 @@ void FileHandler::thrdMain(FileHandler * dlv)
                 sttresult << std::endl;
 				sttresult.close();
 			}
+#ifdef ENC_UTF8
             if (utf_buf) free(utf_buf);
+#endif
 			delete item;
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(5));

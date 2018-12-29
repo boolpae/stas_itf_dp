@@ -43,6 +43,8 @@
 #include <fvad.h>
 
 #ifdef USE_XREDIS
+#include "RedisHandler.h"
+
 #include <iconv.h>
 
 #include "rapidjson/document.h"     // rapidjson's DOM-style API
@@ -323,6 +325,12 @@ void VRClient::thrdRxProcess(VRClient* client) {
     size_t framelen;
     std::string svr_nm;
 
+    char timebuff [32];
+    struct tm * timeinfo = localtime(&client->m_tStart);
+    strftime (timebuff,sizeof(timebuff),"%Y%m%d%H:%M:%S",timeinfo);
+    std::string filename = client->m_pcm_path + "/" + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId + std::string("_r.wav");
+    std::ofstream pcmFile;
+
     auto search = client->ThreadInfoTable[client->m_sCallId];
 
     vBuff.reserve(MM_SIZE);
@@ -357,8 +365,8 @@ void VRClient::thrdRxProcess(VRClient* client) {
     wHdr.Data.ChunkSize = 0;
 
     if (client->m_is_save_pcm) {
-        std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_r.wav");
-        std::ofstream pcmFile;
+        // std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_r.wav");
+        // std::ofstream pcmFile;
 
         pcmFile.open(filename, ios::out | ios::trunc | ios::binary);
         if (pcmFile.is_open()) {
@@ -483,8 +491,8 @@ void VRClient::thrdRxProcess(VRClient* client) {
                 
 
                 if (client->m_is_save_pcm) {
-                    std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_r.wav");
-                    std::ofstream pcmFile;
+                    // std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_r.wav");
+                    // std::ofstream pcmFile;
 
                     pcmFile.open(filename, ios::out | ios::app | ios::binary);
                     if (pcmFile.is_open()) {
@@ -840,8 +848,8 @@ void VRClient::thrdRxProcess(VRClient* client) {
                     delete item;
 
                     if (client->m_is_save_pcm) {
-                        std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_r.wav");
-                        std::ofstream pcmFile;
+                        // std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_r.wav");
+                        // std::ofstream pcmFile;
 
                         wHdr.Riff.ChunkSize = totalVoiceDataLen + sizeof(WAVE_HEADER) - 8;
                         wHdr.Data.ChunkSize = totalVoiceDataLen;
@@ -919,6 +927,12 @@ void VRClient::thrdTxProcess(VRClient* client) {
     size_t framelen;
     std::string svr_nm;
 
+    char timebuff [32];
+    struct tm * timeinfo = localtime(&client->m_tStart);
+    strftime (timebuff,sizeof(timebuff),"%Y%m%d%H:%M:%S",timeinfo);
+    std::string filename = client->m_pcm_path + "/" + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId + std::string("_l.wav");
+    std::ofstream pcmFile;
+
     auto search = client->ThreadInfoTable[client->m_sCallId];
 
     vBuff.reserve(MM_SIZE);
@@ -953,9 +967,6 @@ void VRClient::thrdTxProcess(VRClient* client) {
     wHdr.Data.ChunkSize = 0;
 
     if (client->m_is_save_pcm) {
-        std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_l.wav");
-        std::ofstream pcmFile;
-
         pcmFile.open(filename, ios::out | ios::trunc | ios::binary);
         if (pcmFile.is_open()) {
             pcmFile.write((const char*)&wHdr, sizeof(WAVE_HEADER));
@@ -1079,8 +1090,8 @@ void VRClient::thrdTxProcess(VRClient* client) {
                 
 
                 if (client->m_is_save_pcm) {
-                    std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_l.wav");
-                    std::ofstream pcmFile;
+                    // std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_l.wav");
+                    // std::ofstream pcmFile;
 
                     pcmFile.open(filename, ios::out | ios::app | ios::binary);
                     if (pcmFile.is_open()) {
@@ -1418,8 +1429,8 @@ void VRClient::thrdTxProcess(VRClient* client) {
                     delete item;
 
                     if (client->m_is_save_pcm) {
-                        std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_l.wav");
-                        std::ofstream pcmFile;
+                        // std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_l.wav");
+                        // std::ofstream pcmFile;
 
                         wHdr.Riff.ChunkSize = totalVoiceDataLen + sizeof(WAVE_HEADER) - 8;
                         wHdr.Data.ChunkSize = totalVoiceDataLen;
@@ -1488,7 +1499,8 @@ void VRClient::insertQueItem(QueItem* item)
 #ifdef USE_XREDIS
 xRedisClient& VRClient::getXRdedisClient()
 {
-    return m_Mgr->getRedisClient();
+    // return m_Mgr->getRedisClient();
+    return RedisHandler::instance()->getRedisClient();
 }
 #endif
 

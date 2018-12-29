@@ -328,14 +328,14 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                             std::string mlfFilename;
                             // save MLF to MLF-File
                             // rx, tx
-                            mlfFilename = client->m_sResultPath + item->getFilename() + "_r.mlf";
+                            mlfFilename = client->m_sResultPath +"/"+ item->getFilename() + "_r.mlf";
                             std::ofstream mlfRFile(mlfFilename, std::ios::out | std::ios::app);
 			                if (mlfRFile.is_open()) {
                                 mlfRFile << rx;
                                 mlfRFile << std::endl;
 				                mlfRFile.close();
                             }
-                            mlfFilename = client->m_sResultPath + item->getFilename() + "_l.mlf";
+                            mlfFilename = client->m_sResultPath +"/"+ item->getFilename() + "_l.mlf";
                             std::ofstream mlfLFile(mlfFilename, std::ios::out | std::ios::app);
 			                if (mlfLFile.is_open()) {
                                 mlfLFile << tx;
@@ -507,7 +507,7 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                             std::string mlfFilename;
                             // save MLF to MLF-File
                             // rx, tx
-                            mlfFilename = client->m_sResultPath + item->getFilename() + ".mlf";
+                            mlfFilename = client->m_sResultPath +"/"+ item->getFilename() + ".mlf";
                             std::ofstream mlfFile(mlfFilename, std::ios::out | std::ios::app);
 			                if (mlfFile.is_open()) {
                                 mlfFile << sValue.c_str() + nPos1;

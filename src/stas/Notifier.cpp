@@ -172,8 +172,14 @@ void Notifier::thrdFunc(Notifier *noti)
                             if (config->getConfig("notify.index_type").compare("filename") == 0) {
 
                                 // download path, uri, filename, call_id에 대한 좀 더 명확한 정의가 필요하다.
+                                #ifdef EXCEPT_EXT
                                 if (noti->m_DBHandler->searchTaskInfo(downpath, *filename.get(), std::string(""))) continue;
                                 noti->m_DBHandler->insertTaskInfo(downpath, *filename.get(), std::string(""));
+                                #else
+                                if (noti->m_DBHandler->searchTaskInfo(downpath, *filename.get(), filename->substr(0, filename->rfind(".")))) continue;
+                                noti->m_DBHandler->insertTaskInfo(downpath, *filename.get(), filename->substr(0, filename->rfind(".")));
+                                #endif
+
 #if 0 // 임시코드
                                 noti->m_vfcm->pushItem(*path.get()+"/"+*filename.get());
                                 logger->debug("Line (%s)", std::string(*path.get()+"/"+*filename.get()).c_str());
@@ -200,8 +206,13 @@ void Notifier::thrdFunc(Notifier *noti)
                                             }
                                         }
                                         else {
+                                            #ifdef EXCEPT_EXT
                                             if (!noti->m_DBHandler->searchTaskInfo(downpath, v[0], v[0])) 
                                                 noti->m_DBHandler->insertTaskInfo(downpath, v[0], v[0]);
+                                            #else
+                                            if (!noti->m_DBHandler->searchTaskInfo(downpath, v[0], v[0].substr(0, v[0].rfind(".")))) 
+                                                noti->m_DBHandler->insertTaskInfo(downpath, v[0], v[0].substr(0, v[0].rfind(".")));
+                                            #endif
                                         }
 #if 0 // 임시코드
                                         noti->m_vfcm->pushItem(line);
