@@ -59,6 +59,7 @@ endif
 endif
 
 FLAGS			+= -DUSE_UPDATE_POOL # Update Task 시 전용 thread를 이용하는 방법을 이용 
+FLAGS			+= -DUSE_REDIS_POOL
 
 SHARED_LIBS		:= -lboost_program_options -lboost_filesystem -lboost_system
 SHARED_LIBS		+= -llog4cpp -lgearman -lodbc

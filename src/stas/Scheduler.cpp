@@ -57,6 +57,10 @@ void Scheduler::thrdFuncScheduler(Scheduler *schd, VFCManager *vfcm)
     std::vector< JobInfoItem* > v;
     JobInfoItem *item;
 
+#ifdef USE_REDIS_POOL
+    bool useRedisPool = !config->getConfig("redis.use_notify_stt", "false").compare("true");
+#endif
+
     if (ham && !ham->getHAStat()) {
         logger->debug("Scheduler::thrdFuncScheduler() - Waiting... for Standby Mode");
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -65,6 +69,10 @@ void Scheduler::thrdFuncScheduler(Scheduler *schd, VFCManager *vfcm)
     while(schd->m_bLiveFlag) {
         // DBHandler의 api를 이용하여 새로운 task를 확인
         // 새로운 task를 VFCManager의 큐에 등록
+
+#ifdef USE_REDIS_POOL
+        if (!useRedisPool) {
+#endif
 
         // Self테이블
         if (schd->m_sttdb->getTaskInfo2(v, vfcm->getAvailableCount(), "TBL_JOB_SELF_INFO") > 0) {
@@ -96,6 +104,9 @@ void Scheduler::thrdFuncScheduler(Scheduler *schd, VFCManager *vfcm)
             v.clear();
         }
 
+#ifdef USE_REDIS_POOL
+        }
+#endif
         // get items from DB
         if (schd->m_sttdb->getTaskInfo(v, vfcm->getAvailableCount(), "TBL_JOB_INFO") > 0) {
             for( std::vector< JobInfoItem* >::iterator iter = v.begin(); iter != v.end(); iter++) {

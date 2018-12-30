@@ -20,14 +20,6 @@
 
 #include <log4cpp/Category.hh>
 
-#undef USE_XREDIS
-
-#ifdef USE_XREDIS
-#include "xRedisClient.h"
-
-using namespace xrc;
-#endif
-
 using namespace std;
 
 class VRClient;
@@ -78,9 +70,6 @@ public:
     
     int addVRC(string callid, string counselcode, string fname, uint8_t jobtype, uint8_t noc);
 
-#ifdef USE_XREDIS
-	xRedisClient& getRedisClient() { return m_xRedis; }
-#endif
 
 private:
 	VRCManager(int geartimeout, FileHandler *deliver, DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen, int mode);
@@ -94,9 +83,6 @@ private:
 	void setGearPort(uint16_t port) { m_nGearPort = port; }
 	void getFnamesFromString4MT(std::string & gearResult, std::vector<std::string>& vFnames);
 
-#ifdef USE_XREDIS
-	xRedisClient m_xRedis;
-#endif
 };
 
 

@@ -686,6 +686,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
                                         if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
                                             client->m_Logger->error("VRClient::thrdRxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
                                         }
+                                        vVal.clear();
 
                                         free(utf_buf);
                                     }
@@ -821,6 +822,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
                                 if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
                                     client->m_Logger->error("VRClient::thrdRxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
                                 }
+                                vVal.clear();
 
                                 free(utf_buf);
                             }
@@ -1275,6 +1277,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
                                         if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
                                             client->m_Logger->error("VRClient::thrdTxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
                                         }
+                                        vVal.clear();
 
                                         free(utf_buf);
                                     }
@@ -1402,6 +1405,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
                                 if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
                                     client->m_Logger->error("VRClient::thrdTxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
                                 }
+                                vVal.clear();
 
                                 free(utf_buf);
                             }

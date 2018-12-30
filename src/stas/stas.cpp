@@ -126,6 +126,14 @@ int main(int argc, const char** argv)
         logger->info("Database Name    :  %s", config->getConfig("database.name", "rt_stt").c_str());
         logger->info("Database CharSet :  %s", config->getConfig("database.chset", "utf8").c_str());
         
+    // RedisHandler 활성화 옵션 체크
+    if (!RedisHandler::instance()) {
+        logger->error("MAIN - ERROR (Failed to get RedisHandler instance)");
+        WorkTracer::release();
+        delete config;
+        return -1;
+    }
+
 #ifndef USE_ODBC
         st2db = DBHandler::instance(config->getConfig("database.type", "mysql"),
                                 config->getConfig("database.addr", "localhost"),
@@ -160,16 +168,6 @@ int main(int argc, const char** argv)
     
     if (!config->getConfig("stt_result.use", "false").compare("true")) {
         deliver = FileHandler::instance(config->getConfig("stt_result.path", "./stt_result")/*, logger*/);
-    }
-
-    // RedisHandler 활성화 옵션 체크
-    if (!RedisHandler::instance()) {
-        logger->error("MAIN - ERROR (Failed to get RedisHandler instance)");
-        VDCManager::release();
-        FileHandler::release();
-        WorkTracer::release();
-        delete config;
-        return -1;
     }
 
 #ifdef ENABLE_REALTIME

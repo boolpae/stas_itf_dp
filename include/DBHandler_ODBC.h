@@ -9,11 +9,17 @@
 #include <queue>
 #include <vector>
 
+#include <log4cpp/Category.hh>
+
 #ifdef USE_FIND_KEYWORD
 #include <list>
 #endif
 
-#include <log4cpp/Category.hh>
+#ifdef USE_REDIS_POOL
+#include "RedisHandler.h"
+
+using namespace xrc;
+#endif // USE_REDIS_POOL
 
 class ItfOdbcPool;
 
@@ -199,6 +205,11 @@ private:
 
 #ifdef USE_FIND_KEYWORD
     static bool m_bThrdUpdateKeywords;
+#endif
+
+#ifdef USE_REDIS_POOL
+    static xRedisClient &s_xRedis;
+    static RedisDBIdx s_dbi;
 #endif
 
     bool m_bUseMask;

@@ -13,6 +13,13 @@
 
 #include <regex>
 
+
+#ifdef USE_REDIS_POOL
+#include "rapidjson/document.h"     // rapidjson's DOM-style API
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+#endif // USE_XREDIS
+
 // std::string pattern_str("[공영일이삼사오육칠팔구\\s]{16,}");
 std::regex pattern("[공영일이삼사오육칠팔구\\s]{20,}");
 
@@ -53,6 +60,30 @@ bool DBHandler::m_bThrdUpdate = false;
 #ifdef USE_FIND_KEYWORD
 std::list< std::string > DBHandler::m_lKeywords;
 bool DBHandler::m_bThrdUpdateKeywords = false;
+#endif
+
+#ifdef USE_REDIS_POOL
+static unsigned int APHash(const char *str) {
+    unsigned int hash = 0;
+    int i;
+    for (i=0; *str; i++) {
+        if ((i&  1) == 0) {
+            hash ^= ((hash << 7) ^ (*str++) ^ (hash >> 3));
+        } else {
+            hash ^= (~((hash << 11) ^ (*str++) ^ (hash >> 5)));
+        }
+    }
+    return (hash&  0x7FFFFFFF);
+}
+
+enum {
+ CACHE_TYPE_1, 
+ CACHE_TYPE_2,
+ CACHE_TYPE_MAX,
+};
+
+xRedisClient &DBHandler::s_xRedis = RedisHandler::instance()->getRedisClient();;
+RedisDBIdx DBHandler::s_dbi(&s_xRedis);
 #endif
 
 DBHandler::DBHandler(std::string dsn,int connCount)
@@ -555,6 +586,10 @@ DBHandler* DBHandler::instance(std::string dsn, std::string id, std::string pw, 
         m_instance = nullptr;
     }
 
+#ifdef USE_REDIS_POOL
+    s_dbi.CreateDBIndex("NOTIFY_STT", APHash, CACHE_TYPE_1);
+#endif
+
     return m_instance;
 }
 
@@ -815,6 +850,10 @@ int DBHandler::insertTaskInfo(std::string downloadPath, std::string filename, st
     struct tm * timeinfo;
     char timebuff [32];
 
+#ifdef USE_REDIS_POOL
+    bool useRedisPool = !config->getConfig("redis.use_notify_stt", "false").compare("true");
+#endif
+
     if (connSet)
     {
         startT = time(NULL);
@@ -843,8 +882,39 @@ int DBHandler::insertTaskInfo(std::string downloadPath, std::string filename, st
 #ifdef USE_REDIS_POOL
             // check config-option
             // 이 옵션이 설정된 경우 Redis에도 작업 요청을 입력한다.
-            // 채널 이름은...REQ_FILE_STT, LPUSH
+            // 채널 이름은...REQ_FILE_STT, LPUSH, 3개의 개별 작업 테이블 중 TBL_JOB_INFO에만 넣는 데이터만을 사용한다
             // Protocol...JSON
+
+            if ( useRedisPool )
+            {
+                std::string sJsonValue;
+                VALUES vVal;
+                int64_t zCount=0;
+                rapidjson::Document d;
+                rapidjson::Document::AllocatorType& alloc = d.GetAllocator();
+
+                d.SetObject();
+
+                d.AddMember("CALL_ID", rapidjson::Value(callId.c_str(), alloc).Move(), alloc);
+                d.AddMember("CS_CD", rapidjson::Value("", alloc).Move(), alloc);
+                d.AddMember("PATH_NM", rapidjson::Value(downloadPath.c_str(), alloc).Move(), alloc);
+                d.AddMember("FILE_NM", rapidjson::Value(filename.c_str(), alloc).Move(), alloc);
+                d.AddMember("REG_DTM", rapidjson::Value(timebuff, alloc).Move(), alloc);
+                d.AddMember("RCD_TP", rapidjson::Value("MN", alloc).Move(), alloc);
+                d.AddMember("TABLE_NM", rapidjson::Value("TBL_JOB_INFO", alloc).Move(), alloc);
+                d.AddMember("PROC_NO", 1, alloc);
+
+                rapidjson::StringBuffer strbuf;
+                rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+                d.Accept(writer);
+
+                sJsonValue = strbuf.GetString();
+                vVal.push_back( sJsonValue );
+
+                s_xRedis.lpush( DBHandler::s_dbi, "NOTIFY_STT", vVal, zCount );
+                vVal.clear();
+            }
+
 #endif
 
         }
@@ -1140,10 +1210,7 @@ int DBHandler::searchTaskInfo(std::string downloadPath, std::string filename, st
 
 int DBHandler::getTaskInfo(std::vector< JobInfoItem* > &v, int availableCount, const char *tableName) 
 {
-    PConnSet connSet = m_pSolDBConnPool->getConnection();
     int ret=0;
-    char sqlbuff[512];
-    SQLRETURN retcode;
     
     char callid[256];
     int counselorcode;
@@ -1151,15 +1218,55 @@ int DBHandler::getTaskInfo(std::vector< JobInfoItem* > &v, int availableCount, c
     char filename[256];
     char regdate[24];
     char rxtx[8];
-    int siCallId, siCCode, siPath, siFilename, siRxtx, siRegdate;
 
 #ifdef USE_REDIS_POOL
-        // check config-option
-        // getTaskInfo2(), getTaskInfo()
-        // 이 옵션이 설정된 경우 Redis에서만 값을 확인하고 리턴한다.
-        // Redis 채널 이름은...REQ_FILE_STT, LLEN, RPOP
-        return 0;
-#endif
+    bool useRedisPool = !config->getConfig("redis.use_notify_stt", "false").compare("true");
+    // check config-option
+    // getTaskInfo2(), getTaskInfo()
+    // 이 옵션이 설정된 경우 Redis에서만 값을 확인하고 리턴한다.
+    // Redis 채널 이름은...REQ_FILE_STT, LLEN, RPOP
+    if ( useRedisPool ) {
+        int64_t zCount=0;
+        rapidjson::Document d;
+        rapidjson::ParseResult ok;
+        std::string jsonValue;
+        std::string sTableName;
+        int nProcNo=1;
+
+        s_xRedis.llen( DBHandler::s_dbi, "NOTIFY_STT", zCount );
+
+        if ( zCount ) {
+            while (zCount) {
+                s_xRedis.rpop( DBHandler::s_dbi, "NOTIFY_STT", jsonValue );
+                ok = d.Parse(jsonValue.c_str());
+
+                if ( ok ) {
+                    sprintf(callid, "%s", d["CALL_ID"].GetString());
+                    counselorcode = 0;
+                    sprintf(path, "%s", d["PATH_NM"].GetString());
+                    sprintf(filename, "%s", d["FILE_NM"].GetString());
+                    sprintf(regdate, "%s", d["REG_DTM"].GetString());
+                    sprintf(rxtx, "%s", d["RCD_TP"].GetString());
+                    sTableName = d["TABLE_NM"].GetString();
+                    nProcNo = d["PROC_NO"].GetInt();
+                    JobInfoItem *item = new JobInfoItem(std::string(callid), std::to_string(counselorcode), std::string(path), std::string(filename), std::string(regdate), std::string(rxtx), sTableName, nProcNo);
+                    v.push_back(item);
+                }
+                zCount--;
+            }
+
+            ret = v.size();
+        }
+    }
+
+    return ret;
+
+#else
+
+    PConnSet connSet = m_pSolDBConnPool->getConnection();
+    char sqlbuff[512];
+    SQLRETURN retcode;
+    int siCallId, siCCode, siPath, siFilename, siRxtx, siRegdate;
     //m_Logger->debug("BEFORE DBHandler::getTaskInfo - ConnectionPool_size(%d), ConnectionPool_active(%d), availableCount(%d)", ConnectionPool_size(m_pool), ConnectionPool_active(m_pool), availableCount);
     
     if (connSet)
@@ -1209,6 +1316,8 @@ int DBHandler::getTaskInfo(std::vector< JobInfoItem* > &v, int availableCount, c
     }
 
     return ret;
+
+#endif
 }
 
 int DBHandler::getTaskInfo2(std::vector< JobInfoItem* > &v, int availableCount, const char *tableName) 
@@ -1227,12 +1336,6 @@ int DBHandler::getTaskInfo2(std::vector< JobInfoItem* > &v, int availableCount, 
     char rxtx[8];
     int siCallId, siPNo, siCCode, siPath, siFilename, siRxtx, siRegdate;
 
-#ifdef USE_REDIS_POOL
-        // check config-option
-        // getTaskInfo2(), getTaskInfo()
-        // Redis 채널 이름은...REQ_FILE_STT, LLEN, RPOP
-        return 0;
-#endif
     //m_Logger->debug("BEFORE DBHandler::getTaskInfo - ConnectionPool_size(%d), ConnectionPool_active(%d), availableCount(%d)", ConnectionPool_size(m_pool), ConnectionPool_active(m_pool), availableCount);
     
     if (connSet)
