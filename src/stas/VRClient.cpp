@@ -42,7 +42,7 @@
 
 #include <fvad.h>
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
 #include "RedisHandler.h"
 
 #include <iconv.h>
@@ -111,7 +111,7 @@ typedef struct
 
 #endif // FAD_FUNC
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
 static unsigned int APHash(const char *str) {
     unsigned int hash = 0;
     int i;
@@ -219,7 +219,7 @@ void VRClient::thrdMain(VRClient* client) {
     framelen = client->m_framelen * 2;
 #endif // FAD_FUNC
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
     iconv_t it;
     VALUES vVal;
     std::string sPubCannel = config->getConfig("redis.pubchannel", "RT-STT");
@@ -279,7 +279,7 @@ void VRClient::thrdMain(VRClient* client) {
         client->m_thrd.detach();
         delete client;
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
         iconv_close(it);
 #endif
         return;
@@ -296,7 +296,7 @@ void VRClient::thrdMain(VRClient* client) {
         client->m_thrd.detach();
         delete client;
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
         iconv_close(it);
 #endif
         return;
@@ -328,7 +328,7 @@ void VRClient::thrdMain(VRClient* client) {
             client->m_thrd.detach();
             delete client;
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
             iconv_close(it);
 #endif
             return;
@@ -482,7 +482,7 @@ void VRClient::thrdMain(VRClient* client) {
                                     // std::cout << "DEBUG : value(" << (char *)value << ") : size(" << result_size << ")" << std::endl;
                                     //client->m_Logger->debug("VRClient::thrdMain(%s) - sttIdx(%d)\nsrc(%s)\ndst(%s)", client->m_sCallId.c_str(), sttIdx, srcBuff, dstBuff);
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
                                     int64_t zCount=0;
                                     std::string sJsonValue;
 
@@ -693,7 +693,7 @@ void VRClient::thrdMain(VRClient* client) {
                             // std::cout << "DEBUG : value(" << (char *)value << ") : size(" << result_size << ")" << std::endl;
                             //client->m_Logger->debug("VRClient::thrdMain(%s) - sttIdx(%d)\nsrc(%s)\ndst(%s)", client->m_sCallId.c_str(), sttIdx, srcBuff, dstBuff);
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
                             int64_t zCount=0;
                             std::string sJsonValue;
                             size_t in_size, out_size;
@@ -788,7 +788,7 @@ void VRClient::thrdMain(VRClient* client) {
                             // struct tm * timeinfo = localtime(&client->m_tStart);
                             strftime (timebuff,sizeof(timebuff),"%Y-%m-%d %H:%M:%S",timeinfo);
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
                             int64_t zCount=0;
                             if (!xRedis.publish(dbi, sPubCannel.c_str(), client->getCallId().c_str(), zCount)) {
                                 client->m_Logger->error("VRClient::thrdMain(%s) - redis publish(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
@@ -869,7 +869,7 @@ void VRClient::thrdMain(VRClient* client) {
 
 	WorkTracer::instance()->insertWork(client->m_sCallId, client->m_cJobType, WorkQueItem::PROCTYPE::R_FREE_WORKER);
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
     iconv_close(it);
 #endif
 
@@ -883,7 +883,7 @@ void VRClient::insertQueItem(QueItem* item)
 	m_qRTQue.push(item);
 }
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
 xRedisClient& VRClient::getXRdedisClient()
 {
     // return m_Mgr->getRedisClient();

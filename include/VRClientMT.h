@@ -13,7 +13,7 @@
 
 #include <log4cpp/Category.hh>
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
 #include "xRedisClient.h"
 
 using namespace xrc;
@@ -104,7 +104,7 @@ public:
 
 	void insertQueItem(QueItem* item);
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
 	xRedisClient& getXRdedisClient();
 #endif
 

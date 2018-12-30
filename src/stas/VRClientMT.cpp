@@ -42,7 +42,7 @@
 
 #include <fvad.h>
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
 #include "RedisHandler.h"
 
 #include <iconv.h>
@@ -112,7 +112,7 @@ typedef struct
 
 #endif // FAD_FUNC
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
 static unsigned int APHash(const char *str) {
     unsigned int hash = 0;
     int i;
@@ -232,14 +232,14 @@ void VRClient::thrdMain(VRClient* client) {
 
     std::string sPubCannel = config->getConfig("redis.pubchannel", "RT-STT");
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
     xRedisClient &xRedis = client->getXRdedisClient();
     RedisDBIdx dbi(&xRedis);
 #endif
 
     auto search = client->ThreadInfoTable[client->m_sCallId];
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
     dbi.CreateDBIndex(client->getCallId().c_str(), APHash, CACHE_TYPE_1);
 #endif
 
@@ -257,7 +257,7 @@ void VRClient::thrdMain(VRClient* client) {
 
     client->m_Mgr->removeVRC(client->m_sCallId);
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
     int64_t zCount=0;
     if (!xRedis.publish(dbi, sPubCannel.c_str(), client->getCallId().c_str(), zCount)) {
         client->m_Logger->error("VRClient::thrdMain(%s) - redis publish(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
@@ -337,7 +337,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
     
     framelen = client->m_framelen * 2;
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
     iconv_t it;
     VALUES vVal;
     std::string sPubCannel = config->getConfig("redis.pubchannel", "RT-STT");
@@ -634,7 +634,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
                                     // std::cout << "DEBUG : value(" << (char *)value << ") : size(" << result_size << ")" << std::endl;
                                     //client->m_Logger->debug("VRClient::thrdMain(%s) - sttIdx(%d)\nsrc(%s)\ndst(%s)", client->m_sCallId.c_str(), sttIdx, srcBuff, dstBuff);
                                     diaNumber = search->getDiaNumber();//client->getDiaNumber();
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
                                     int64_t zCount=0;
                                     std::string sJsonValue;
 
@@ -768,7 +768,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
                             // std::cout << "DEBUG : value(" << (char *)value << ") : size(" << result_size << ")" << std::endl;
                             //client->m_Logger->debug("VRClient::thrdMain(%s) - sttIdx(%d)\nsrc(%s)\ndst(%s)", client->m_sCallId.c_str(), sttIdx, srcBuff, dstBuff);
                             diaNumber = search->getDiaNumber();//client->getDiaNumber();
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
                             int64_t zCount=0;
                             std::string sJsonValue;
                             size_t in_size, out_size;
@@ -893,7 +893,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
 
     gearman_client_free(gearClient);
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
     iconv_close(it);
 #endif
 
@@ -941,7 +941,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
     
     framelen = client->m_framelen * 2;
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
     iconv_t it;
     VALUES vVal;
     std::string sPubCannel = config->getConfig("redis.pubchannel", "RT-STT");
@@ -1230,7 +1230,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
                                     // std::cout << "DEBUG : value(" << (char *)value << ") : size(" << result_size << ")" << std::endl;
                                     //client->m_Logger->debug("VRClient::thrdMain(%s) - sttIdx(%d)\nsrc(%s)\ndst(%s)", client->m_sCallId.c_str(), sttIdx, srcBuff, dstBuff);
                                     diaNumber = search->getDiaNumber();//client->getDiaNumber();
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
                                     int64_t zCount=0;
                                     std::string sJsonValue;
 
@@ -1359,7 +1359,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
                             // std::cout << "DEBUG : value(" << (char *)value << ") : size(" << result_size << ")" << std::endl;
                             //client->m_Logger->debug("VRClient::thrdMain(%s) - sttIdx(%d)\nsrc(%s)\ndst(%s)", client->m_sCallId.c_str(), sttIdx, srcBuff, dstBuff);
                             diaNumber = search->getDiaNumber();//client->getDiaNumber();
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
                             int64_t zCount=0;
                             std::string sJsonValue;
                             size_t in_size, out_size;
@@ -1475,7 +1475,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
 
     gearman_client_free(gearClient);
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
     iconv_close(it);
 #endif
 
@@ -1500,7 +1500,7 @@ void VRClient::insertQueItem(QueItem* item)
     }
 }
 
-#ifdef USE_XREDIS
+#ifdef USE_REDIS_POOL
 xRedisClient& VRClient::getXRdedisClient()
 {
     // return m_Mgr->getRedisClient();

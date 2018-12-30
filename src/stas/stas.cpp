@@ -126,13 +126,15 @@ int main(int argc, const char** argv)
         logger->info("Database Name    :  %s", config->getConfig("database.name", "rt_stt").c_str());
         logger->info("Database CharSet :  %s", config->getConfig("database.chset", "utf8").c_str());
         
+#ifdef USE_REDIS_POOL
     // RedisHandler 활성화 옵션 체크
-    if (!RedisHandler::instance()) {
+    if (!config->getConfig("redis.use", "false").compare("true") && !RedisHandler::instance()) {
         logger->error("MAIN - ERROR (Failed to get RedisHandler instance)");
         WorkTracer::release();
         delete config;
         return -1;
     }
+#endif
 
 #ifndef USE_ODBC
         st2db = DBHandler::instance(config->getConfig("database.type", "mysql"),

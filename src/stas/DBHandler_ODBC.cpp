@@ -18,7 +18,7 @@
 #include "rapidjson/document.h"     // rapidjson's DOM-style API
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
-#endif // USE_XREDIS
+#endif // USE_REDIS_POOL
 
 // std::string pattern_str("[공영일이삼사오육칠팔구\\s]{16,}");
 std::regex pattern("[공영일이삼사오육칠팔구\\s]{20,}");
