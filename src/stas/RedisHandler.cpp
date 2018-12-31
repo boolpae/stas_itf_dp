@@ -1,6 +1,7 @@
 /*
  * RedisHandler Module
  */
+#ifdef USE_REDIS_POOL
 
 #include "RedisHandler.h"
 #include "stas.h"
@@ -73,3 +74,6 @@ void RedisHandler::thrdKeepAlive(RedisHandler* handler)
         std::this_thread::sleep_for(std::chrono::seconds(100));
     }
 }
+
+
+#endif  // USE_REDIS_POOL

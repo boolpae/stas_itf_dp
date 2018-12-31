@@ -1,3 +1,5 @@
+#ifdef USE_REDIS_POOL
+
 #ifndef _REDIS_HANDLER_H_
 #define _REDIS_HANDLER_H_
 
@@ -27,3 +29,5 @@ private:
 
 
 #endif // _REDIS_HANDLER_H_
+
+#endif // USE_REDIS_POOL
