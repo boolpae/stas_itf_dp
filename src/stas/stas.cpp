@@ -128,7 +128,7 @@ int main(int argc, const char** argv)
         
 #ifdef USE_REDIS_POOL
     // RedisHandler 활성화 옵션 체크
-    if (!config->getConfig("redis.use", "false").compare("true") && !RedisHandler::instance()) {
+    if (!RedisHandler::instance()) {
         logger->error("MAIN - ERROR (Failed to get RedisHandler instance)");
         WorkTracer::release();
         delete config;

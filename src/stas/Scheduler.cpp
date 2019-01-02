@@ -58,7 +58,7 @@ void Scheduler::thrdFuncScheduler(Scheduler *schd, VFCManager *vfcm)
     JobInfoItem *item;
 
 #ifdef USE_REDIS_POOL
-    bool useRedisPool = !config->getConfig("redis.use_notify_stt", "false").compare("true");
+    bool useRedisPool = !config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.use_notify_stt", "false").compare("true");
 #endif
 
     if (ham && !ham->getHAStat()) {
