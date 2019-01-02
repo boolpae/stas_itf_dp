@@ -95,11 +95,9 @@ DBHandler::DBHandler(std::string dsn,int connCount)
     m_bUseMask = config->getConfig("stas.use_mask", "false").compare("false");
     m_bSaveStt = config->getConfig("database.save_stt", "false").compare("false");
 
-#ifdef USE_REDIS_POOL
     m_buseRedis = !config->getConfig("redis.use", "false").compare("true");
     m_buseRedisPool = m_buseRedis & !config->getConfig("redis.use_notify_stt", "false").compare("true");
     m_sNotiChannel = config->getConfig("redis.notichannel", "NOTIFY-STT");
-#endif
 
 	m_Logger->debug("DBHandler Constructed.\n");
 }
@@ -1266,11 +1264,11 @@ int DBHandler::getTaskInfo(std::vector< JobInfoItem* > &v, int availableCount, c
 
             ret = v.size();
         }
+        return ret;
     }
+    else {
 
-    return ret;
-
-#else
+#endif
 
     PConnSet connSet = m_pSolDBConnPool->getConnection();
     char sqlbuff[512];
@@ -1326,6 +1324,8 @@ int DBHandler::getTaskInfo(std::vector< JobInfoItem* > &v, int availableCount, c
 
     return ret;
 
+#ifdef USE_REDIS_POOL
+    }
 #endif
 }
 
