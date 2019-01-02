@@ -233,7 +233,7 @@ void VRClient::thrdMain(VRClient* client) {
     std::string sPubCannel = config->getConfig("redis.pubchannel", "RT-STT");
 
 #ifdef USE_REDIS_POOL
-    bool useRedis = !config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true");
+    bool useRedis = (!config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true"));
     xRedisClient &xRedis = client->getXRdedisClient();
     RedisDBIdx dbi(&xRedis);
 #endif
@@ -340,7 +340,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
     framelen = client->m_framelen * 2;
 
 #ifdef USE_REDIS_POOL
-    bool useRedis (!config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true"));
+    bool useRedis = (!config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true"));
     iconv_t it;
     VALUES vVal;
     std::string sPubCannel = config->getConfig("redis.pubchannel", "RT-STT");
@@ -952,7 +952,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
     framelen = client->m_framelen * 2;
 
 #ifdef USE_REDIS_POOL
-    bool useRedis = !config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true");
+    bool useRedis = (!config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true"));
     iconv_t it;
     VALUES vVal;
     std::string sPubCannel = config->getConfig("redis.pubchannel", "RT-STT");
