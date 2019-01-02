@@ -50,19 +50,23 @@ RedisHandler* RedisHandler::instance()
 		redisList[i].poolsize = config->getConfig("redis.poolsize", 10);
 	}
 
-	m_instance->m_xRedis.Init(CACHE_TYPE_MAX);
-    bool bConn = m_instance->m_xRedis.ConnectRedisCache(redisList, sizeof(redisList) / sizeof(RedisNode), 3, CACHE_TYPE_1);
-	//bConn = true;
-	if (!bConn) {
-		log4cpp::Category *logger = config->getLogger();
-        logger->error("RedisHandler::instance() - ERROR (Failed to connect redis server)");
-		delete m_instance;
-		m_instance = nullptr;
-	}
+    if ( !config->getConfig("redis.use", "false").compare("true") ) {
 
-    // KEEPALIVE 호출할 쓰레드 필요... 자체 쓰레드를 이용할 것인지 main 쓰레드를 이용할 것인가?
-	std::thread thrd = std::thread(RedisHandler::thrdKeepAlive, m_instance);
-    thrd.detach();
+        m_instance->m_xRedis.Init(CACHE_TYPE_MAX);
+        bool bConn = m_instance->m_xRedis.ConnectRedisCache(redisList, sizeof(redisList) / sizeof(RedisNode), 3, CACHE_TYPE_1);
+        //bConn = true;
+        if (!bConn) {
+            log4cpp::Category *logger = config->getLogger();
+            logger->error("RedisHandler::instance() - ERROR (Failed to connect redis server)");
+            delete m_instance;
+            m_instance = nullptr;
+        }
+
+        // KEEPALIVE 호출할 쓰레드 필요... 자체 쓰레드를 이용할 것인지 main 쓰레드를 이용할 것인가?
+        std::thread thrd = std::thread(RedisHandler::thrdKeepAlive, m_instance);
+        thrd.detach();
+
+    }
 
     return m_instance;
 }

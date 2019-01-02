@@ -233,6 +233,7 @@ void VRClient::thrdMain(VRClient* client) {
     std::string sPubCannel = config->getConfig("redis.pubchannel", "RT-STT");
 
 #ifdef USE_REDIS_POOL
+    bool useRedis = !config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true");
     xRedisClient &xRedis = client->getXRdedisClient();
     RedisDBIdx dbi(&xRedis);
 #endif
@@ -240,7 +241,8 @@ void VRClient::thrdMain(VRClient* client) {
     auto search = client->ThreadInfoTable[client->m_sCallId];
 
 #ifdef USE_REDIS_POOL
-    dbi.CreateDBIndex(client->getCallId().c_str(), APHash, CACHE_TYPE_1);
+    if ( useRedis ) 
+        dbi.CreateDBIndex(client->getCallId().c_str(), APHash, CACHE_TYPE_1);
 #endif
 
     auto t1 = std::chrono::high_resolution_clock::now();
@@ -259,7 +261,7 @@ void VRClient::thrdMain(VRClient* client) {
 
 #ifdef USE_REDIS_POOL
     int64_t zCount=0;
-    if (!xRedis.publish(dbi, sPubCannel.c_str(), client->getCallId().c_str(), zCount)) {
+    if ( useRedis && !xRedis.publish(dbi, sPubCannel.c_str(), client->getCallId().c_str(), zCount)) {
         client->m_Logger->error("VRClient::thrdMain(%s) - redis publish(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
     }
 #endif
@@ -338,14 +340,17 @@ void VRClient::thrdRxProcess(VRClient* client) {
     framelen = client->m_framelen * 2;
 
 #ifdef USE_REDIS_POOL
+    bool useRedis (!config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true"));
     iconv_t it;
     VALUES vVal;
     std::string sPubCannel = config->getConfig("redis.pubchannel", "RT-STT");
     xRedisClient &xRedis = client->getXRdedisClient();
     RedisDBIdx dbi(&xRedis);
 
-    dbi.CreateDBIndex(client->getCallId().c_str(), APHash, CACHE_TYPE_1);
-    it = iconv_open("UTF-8", "EUC-KR");
+    if ( useRedis ) {
+        dbi.CreateDBIndex(client->getCallId().c_str(), APHash, CACHE_TYPE_1);
+        it = iconv_open("UTF-8", "EUC-KR");
+    }
 #endif
 
     memcpy(wHdr.Riff.ChunkID, "RIFF", 4);
@@ -635,60 +640,62 @@ void VRClient::thrdRxProcess(VRClient* client) {
                                     //client->m_Logger->debug("VRClient::thrdMain(%s) - sttIdx(%d)\nsrc(%s)\ndst(%s)", client->m_sCallId.c_str(), sttIdx, srcBuff, dstBuff);
                                     diaNumber = search->getDiaNumber();//client->getDiaNumber();
 #ifdef USE_REDIS_POOL
-                                    int64_t zCount=0;
-                                    std::string sJsonValue;
+                                    if ( useRedis ) {
+                                        int64_t zCount=0;
+                                        std::string sJsonValue;
 
-                                    size_t in_size, out_size;
-                                    // iconv_t it;
-                                    char *utf_buf = NULL;
-                                    char *input_buf_ptr = NULL;
-                                    char *output_buf_ptr = NULL;
+                                        size_t in_size, out_size;
+                                        // iconv_t it;
+                                        char *utf_buf = NULL;
+                                        char *input_buf_ptr = NULL;
+                                        char *output_buf_ptr = NULL;
 
-                                    in_size = modValue.size();
-                                    out_size = in_size * 2 + 1;
-                                    utf_buf = (char *)malloc(out_size);
+                                        in_size = modValue.size();
+                                        out_size = in_size * 2 + 1;
+                                        utf_buf = (char *)malloc(out_size);
 
-                                    if (utf_buf) {
-                                        memset(utf_buf, 0, out_size);
+                                        if (utf_buf) {
+                                            memset(utf_buf, 0, out_size);
 
-                                        input_buf_ptr = (char *)modValue.c_str();
-                                        output_buf_ptr = utf_buf;
+                                            input_buf_ptr = (char *)modValue.c_str();
+                                            output_buf_ptr = utf_buf;
 
-                                        // it = iconv_open("UTF-8", "EUC-KR");
+                                            // it = iconv_open("UTF-8", "EUC-KR");
 
-                                        iconv(it, &input_buf_ptr, &in_size, &output_buf_ptr, &out_size);
-                                        
-                                        // iconv_close(it);
-                                        
+                                            iconv(it, &input_buf_ptr, &in_size, &output_buf_ptr, &out_size);
+                                            
+                                            // iconv_close(it);
+                                            
 
-                                        {
-                                            rapidjson::Document d;
-                                            rapidjson::Document::AllocatorType& alloc = d.GetAllocator();
+                                            {
+                                                rapidjson::Document d;
+                                                rapidjson::Document::AllocatorType& alloc = d.GetAllocator();
 
-                                            d.SetObject();
-                                            d.AddMember("IDX", diaNumber, alloc);
-                                            d.AddMember("CALL_ID", rapidjson::Value(client->getCallId().c_str(), alloc).Move(), alloc);
-                                            d.AddMember("SPK", rapidjson::Value("R", alloc).Move(), alloc);
-                                            d.AddMember("POS_START", client->rx_sframe/10, alloc);
-                                            d.AddMember("POS_END", client->rx_eframe/10, alloc);
-                                            d.AddMember("VALUE", rapidjson::Value(utf_buf, alloc).Move(), alloc);
+                                                d.SetObject();
+                                                d.AddMember("IDX", diaNumber, alloc);
+                                                d.AddMember("CALL_ID", rapidjson::Value(client->getCallId().c_str(), alloc).Move(), alloc);
+                                                d.AddMember("SPK", rapidjson::Value("R", alloc).Move(), alloc);
+                                                d.AddMember("POS_START", client->rx_sframe/10, alloc);
+                                                d.AddMember("POS_END", client->rx_eframe/10, alloc);
+                                                d.AddMember("VALUE", rapidjson::Value(utf_buf, alloc).Move(), alloc);
 
-                                            rapidjson::StringBuffer strbuf;
-                                            rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
-                                            d.Accept(writer);
+                                                rapidjson::StringBuffer strbuf;
+                                                rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+                                                d.Accept(writer);
 
-                                            sJsonValue = strbuf.GetString();
+                                                sJsonValue = strbuf.GetString();
+                                            }
+
+                                            vVal.push_back(toString(diaNumber));
+                                            vVal.push_back(sJsonValue);
+
+                                            if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
+                                                client->m_Logger->error("VRClient::thrdRxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
+                                            }
+                                            vVal.clear();
+
+                                            free(utf_buf);
                                         }
-
-                                        vVal.push_back(toString(diaNumber));
-                                        vVal.push_back(sJsonValue);
-
-                                        if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
-                                            client->m_Logger->error("VRClient::thrdRxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
-                                        }
-                                        vVal.clear();
-
-                                        free(utf_buf);
                                     }
 #endif
                                     // to DB
@@ -769,62 +776,64 @@ void VRClient::thrdRxProcess(VRClient* client) {
                             //client->m_Logger->debug("VRClient::thrdMain(%s) - sttIdx(%d)\nsrc(%s)\ndst(%s)", client->m_sCallId.c_str(), sttIdx, srcBuff, dstBuff);
                             diaNumber = search->getDiaNumber();//client->getDiaNumber();
 #ifdef USE_REDIS_POOL
-                            int64_t zCount=0;
-                            std::string sJsonValue;
-                            size_t in_size, out_size;
-                            // iconv_t it;
-                            char *utf_buf = NULL;
-                            char *input_buf_ptr = NULL;
-                            char *output_buf_ptr = NULL;
+                            if ( useRedis ) {
+                                int64_t zCount=0;
+                                std::string sJsonValue;
+                                size_t in_size, out_size;
+                                // iconv_t it;
+                                char *utf_buf = NULL;
+                                char *input_buf_ptr = NULL;
+                                char *output_buf_ptr = NULL;
 
-                            in_size = modValue.size();
-                            out_size = in_size * 2 + 1;
-                            utf_buf = (char *)malloc(out_size);
+                                in_size = modValue.size();
+                                out_size = in_size * 2 + 1;
+                                utf_buf = (char *)malloc(out_size);
 
-                            if (utf_buf) {
-                                memset(utf_buf, 0, out_size);
+                                if (utf_buf) {
+                                    memset(utf_buf, 0, out_size);
 
-                                input_buf_ptr = (char *)modValue.c_str();
-                                output_buf_ptr = utf_buf;
+                                    input_buf_ptr = (char *)modValue.c_str();
+                                    output_buf_ptr = utf_buf;
 
-                                // it = iconv_open("UTF-8", "EUC-KR");
+                                    // it = iconv_open("UTF-8", "EUC-KR");
 
-                                iconv(it, &input_buf_ptr, &in_size, &output_buf_ptr, &out_size);
-                                
-                                // iconv_close(it);
+                                    iconv(it, &input_buf_ptr, &in_size, &output_buf_ptr, &out_size);
+                                    
+                                    // iconv_close(it);
 
-                                {
-                                    rapidjson::Document d;
-                                    rapidjson::Document::AllocatorType& alloc = d.GetAllocator();
+                                    {
+                                        rapidjson::Document d;
+                                        rapidjson::Document::AllocatorType& alloc = d.GetAllocator();
 
-                                    d.SetObject();
-                                    d.AddMember("IDX", diaNumber, alloc);
-                                    d.AddMember("CALL_ID", rapidjson::Value(client->getCallId().c_str(), alloc).Move(), alloc);
-                                    d.AddMember("SPK", rapidjson::Value("R", alloc).Move(), alloc);
-                                    d.AddMember("POS_START", client->rx_sframe/10, alloc);
-                                    d.AddMember("POS_END", client->rx_eframe/10, alloc);
-                                    d.AddMember("VALUE", rapidjson::Value(utf_buf, alloc).Move(), alloc);
+                                        d.SetObject();
+                                        d.AddMember("IDX", diaNumber, alloc);
+                                        d.AddMember("CALL_ID", rapidjson::Value(client->getCallId().c_str(), alloc).Move(), alloc);
+                                        d.AddMember("SPK", rapidjson::Value("R", alloc).Move(), alloc);
+                                        d.AddMember("POS_START", client->rx_sframe/10, alloc);
+                                        d.AddMember("POS_END", client->rx_eframe/10, alloc);
+                                        d.AddMember("VALUE", rapidjson::Value(utf_buf, alloc).Move(), alloc);
 
-                                    rapidjson::StringBuffer strbuf;
-                                    rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
-                                    d.Accept(writer);
+                                        rapidjson::StringBuffer strbuf;
+                                        rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+                                        d.Accept(writer);
 
-                                    sJsonValue = strbuf.GetString();
+                                        sJsonValue = strbuf.GetString();
+                                    }
+
+                                    vVal.push_back(toString(diaNumber));
+                                    vVal.push_back(sJsonValue);
+
+                                    
+                                    // vVal.push_back(toString(diaNumber));
+                                    // vVal.push_back(modValue);
+
+                                    if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
+                                        client->m_Logger->error("VRClient::thrdRxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
+                                    }
+                                    vVal.clear();
+
+                                    free(utf_buf);
                                 }
-
-                                vVal.push_back(toString(diaNumber));
-                                vVal.push_back(sJsonValue);
-
-                                
-                                // vVal.push_back(toString(diaNumber));
-                                // vVal.push_back(modValue);
-
-                                if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
-                                    client->m_Logger->error("VRClient::thrdRxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
-                                }
-                                vVal.clear();
-
-                                free(utf_buf);
                             }
 #endif
 
@@ -894,7 +903,8 @@ void VRClient::thrdRxProcess(VRClient* client) {
     gearman_client_free(gearClient);
 
 #ifdef USE_REDIS_POOL
-    iconv_close(it);
+    if ( useRedis ) 
+        iconv_close(it);
 #endif
 
     // search->setRxState(0);// client->m_RxState = 0;
@@ -942,14 +952,17 @@ void VRClient::thrdTxProcess(VRClient* client) {
     framelen = client->m_framelen * 2;
 
 #ifdef USE_REDIS_POOL
+    bool useRedis = !config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true");
     iconv_t it;
     VALUES vVal;
     std::string sPubCannel = config->getConfig("redis.pubchannel", "RT-STT");
     xRedisClient &xRedis = client->getXRdedisClient();
     RedisDBIdx dbi(&xRedis);
 
-    dbi.CreateDBIndex(client->getCallId().c_str(), APHash, CACHE_TYPE_1);
-    it = iconv_open("UTF-8", "EUC-KR");
+    if ( useRedis ) {
+        dbi.CreateDBIndex(client->getCallId().c_str(), APHash, CACHE_TYPE_1);
+        it = iconv_open("UTF-8", "EUC-KR");
+    }
 #endif
 
     memcpy(wHdr.Riff.ChunkID, "RIFF", 4);
@@ -1231,55 +1244,57 @@ void VRClient::thrdTxProcess(VRClient* client) {
                                     //client->m_Logger->debug("VRClient::thrdMain(%s) - sttIdx(%d)\nsrc(%s)\ndst(%s)", client->m_sCallId.c_str(), sttIdx, srcBuff, dstBuff);
                                     diaNumber = search->getDiaNumber();//client->getDiaNumber();
 #ifdef USE_REDIS_POOL
-                                    int64_t zCount=0;
-                                    std::string sJsonValue;
+                                    if ( useRedis ) {
+                                        int64_t zCount=0;
+                                        std::string sJsonValue;
 
-                                    size_t in_size, out_size;
-                                    // iconv_t it;
-                                    char *utf_buf = NULL;
-                                    char *input_buf_ptr = NULL;
-                                    char *output_buf_ptr = NULL;
+                                        size_t in_size, out_size;
+                                        // iconv_t it;
+                                        char *utf_buf = NULL;
+                                        char *input_buf_ptr = NULL;
+                                        char *output_buf_ptr = NULL;
 
-                                    in_size = modValue.size();
-                                    out_size = in_size * 2 + 1;
-                                    utf_buf = (char *)malloc(out_size);
+                                        in_size = modValue.size();
+                                        out_size = in_size * 2 + 1;
+                                        utf_buf = (char *)malloc(out_size);
 
-                                    if (utf_buf) {
-                                        memset(utf_buf, 0, out_size);
+                                        if (utf_buf) {
+                                            memset(utf_buf, 0, out_size);
 
-                                        input_buf_ptr = (char *)modValue.c_str();
-                                        output_buf_ptr = utf_buf;
+                                            input_buf_ptr = (char *)modValue.c_str();
+                                            output_buf_ptr = utf_buf;
 
-                                        iconv(it, &input_buf_ptr, &in_size, &output_buf_ptr, &out_size);
+                                            iconv(it, &input_buf_ptr, &in_size, &output_buf_ptr, &out_size);
 
-                                        {
-                                            rapidjson::Document d;
-                                            rapidjson::Document::AllocatorType& alloc = d.GetAllocator();
+                                            {
+                                                rapidjson::Document d;
+                                                rapidjson::Document::AllocatorType& alloc = d.GetAllocator();
 
-                                            d.SetObject();
-                                            d.AddMember("IDX", diaNumber, alloc);
-                                            d.AddMember("CALL_ID", rapidjson::Value(client->getCallId().c_str(), alloc).Move(), alloc);
-                                            d.AddMember("SPK", rapidjson::Value("L", alloc).Move(), alloc);
-                                            d.AddMember("POS_START", client->tx_sframe/10, alloc);
-                                            d.AddMember("POS_END", client->tx_eframe/10, alloc);
-                                            d.AddMember("VALUE", rapidjson::Value(utf_buf, alloc).Move(), alloc);
+                                                d.SetObject();
+                                                d.AddMember("IDX", diaNumber, alloc);
+                                                d.AddMember("CALL_ID", rapidjson::Value(client->getCallId().c_str(), alloc).Move(), alloc);
+                                                d.AddMember("SPK", rapidjson::Value("L", alloc).Move(), alloc);
+                                                d.AddMember("POS_START", client->tx_sframe/10, alloc);
+                                                d.AddMember("POS_END", client->tx_eframe/10, alloc);
+                                                d.AddMember("VALUE", rapidjson::Value(utf_buf, alloc).Move(), alloc);
 
-                                            rapidjson::StringBuffer strbuf;
-                                            rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
-                                            d.Accept(writer);
+                                                rapidjson::StringBuffer strbuf;
+                                                rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+                                                d.Accept(writer);
 
-                                            sJsonValue = strbuf.GetString();
+                                                sJsonValue = strbuf.GetString();
+                                            }
+
+                                            vVal.push_back(toString(diaNumber));
+                                            vVal.push_back(sJsonValue);
+
+                                            if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
+                                                client->m_Logger->error("VRClient::thrdTxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
+                                            }
+                                            vVal.clear();
+
+                                            free(utf_buf);
                                         }
-
-                                        vVal.push_back(toString(diaNumber));
-                                        vVal.push_back(sJsonValue);
-
-                                        if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
-                                            client->m_Logger->error("VRClient::thrdTxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
-                                        }
-                                        vVal.clear();
-
-                                        free(utf_buf);
                                     }
 #endif
                                     // to DB
@@ -1360,54 +1375,56 @@ void VRClient::thrdTxProcess(VRClient* client) {
                             //client->m_Logger->debug("VRClient::thrdMain(%s) - sttIdx(%d)\nsrc(%s)\ndst(%s)", client->m_sCallId.c_str(), sttIdx, srcBuff, dstBuff);
                             diaNumber = search->getDiaNumber();//client->getDiaNumber();
 #ifdef USE_REDIS_POOL
-                            int64_t zCount=0;
-                            std::string sJsonValue;
-                            size_t in_size, out_size;
-                            // iconv_t it;
-                            char *utf_buf = NULL;
-                            char *input_buf_ptr = NULL;
-                            char *output_buf_ptr = NULL;
+                            if ( useRedis ) {
+                                int64_t zCount=0;
+                                std::string sJsonValue;
+                                size_t in_size, out_size;
+                                // iconv_t it;
+                                char *utf_buf = NULL;
+                                char *input_buf_ptr = NULL;
+                                char *output_buf_ptr = NULL;
 
-                            in_size = modValue.size();
-                            out_size = in_size * 2 + 1;
-                            utf_buf = (char *)malloc(out_size);
+                                in_size = modValue.size();
+                                out_size = in_size * 2 + 1;
+                                utf_buf = (char *)malloc(out_size);
 
-                            if (utf_buf) {
-                                memset(utf_buf, 0, out_size);
+                                if (utf_buf) {
+                                    memset(utf_buf, 0, out_size);
 
-                                input_buf_ptr = (char *)modValue.c_str();
-                                output_buf_ptr = utf_buf;
+                                    input_buf_ptr = (char *)modValue.c_str();
+                                    output_buf_ptr = utf_buf;
 
-                                iconv(it, &input_buf_ptr, &in_size, &output_buf_ptr, &out_size);
+                                    iconv(it, &input_buf_ptr, &in_size, &output_buf_ptr, &out_size);
 
-                                {
-                                    rapidjson::Document d;
-                                    rapidjson::Document::AllocatorType& alloc = d.GetAllocator();
+                                    {
+                                        rapidjson::Document d;
+                                        rapidjson::Document::AllocatorType& alloc = d.GetAllocator();
 
-                                    d.SetObject();
-                                    d.AddMember("IDX", diaNumber, alloc);
-                                    d.AddMember("CALL_ID", rapidjson::Value(client->getCallId().c_str(), alloc).Move(), alloc);
-                                    d.AddMember("SPK", rapidjson::Value("L", alloc).Move(), alloc);
-                                    d.AddMember("POS_START", client->tx_sframe/10, alloc);
-                                    d.AddMember("POS_END", client->tx_eframe/10, alloc);
-                                    d.AddMember("VALUE", rapidjson::Value(utf_buf, alloc).Move(), alloc);
+                                        d.SetObject();
+                                        d.AddMember("IDX", diaNumber, alloc);
+                                        d.AddMember("CALL_ID", rapidjson::Value(client->getCallId().c_str(), alloc).Move(), alloc);
+                                        d.AddMember("SPK", rapidjson::Value("L", alloc).Move(), alloc);
+                                        d.AddMember("POS_START", client->tx_sframe/10, alloc);
+                                        d.AddMember("POS_END", client->tx_eframe/10, alloc);
+                                        d.AddMember("VALUE", rapidjson::Value(utf_buf, alloc).Move(), alloc);
 
-                                    rapidjson::StringBuffer strbuf;
-                                    rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
-                                    d.Accept(writer);
+                                        rapidjson::StringBuffer strbuf;
+                                        rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+                                        d.Accept(writer);
 
-                                    sJsonValue = strbuf.GetString();
+                                        sJsonValue = strbuf.GetString();
+                                    }
+
+                                    vVal.push_back(toString(diaNumber));
+                                    vVal.push_back(sJsonValue);
+
+                                    if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
+                                        client->m_Logger->error("VRClient::thrdTxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
+                                    }
+                                    vVal.clear();
+
+                                    free(utf_buf);
                                 }
-
-                                vVal.push_back(toString(diaNumber));
-                                vVal.push_back(sJsonValue);
-
-                                if ( !xRedis.zadd(dbi, client->getCallId(), vVal, zCount) ) {
-                                    client->m_Logger->error("VRClient::thrdTxProcess(%s) - redis zadd(). [%s], zCount(%d)", client->m_sCallId.c_str(), dbi.GetErrInfo(), zCount);
-                                }
-                                vVal.clear();
-
-                                free(utf_buf);
                             }
 #endif
 
@@ -1476,7 +1493,8 @@ void VRClient::thrdTxProcess(VRClient* client) {
     gearman_client_free(gearClient);
 
 #ifdef USE_REDIS_POOL
-    iconv_close(it);
+    if ( useRedis )
+        iconv_close(it);
 #endif
 
     // search->setTxState(0);// client->m_TxState = 0;

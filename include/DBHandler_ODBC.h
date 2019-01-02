@@ -213,6 +213,8 @@ private:
 #endif
 
     bool m_bUseMask;
+
+    bool m_bSaveStt;
 };
 
 

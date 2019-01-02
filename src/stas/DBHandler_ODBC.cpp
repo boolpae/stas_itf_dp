@@ -93,6 +93,7 @@ DBHandler::DBHandler(std::string dsn,int connCount)
     m_pSolDBConnPool = nullptr;
     m_pInterDBConnPool = nullptr;
     m_bUseMask = config->getConfig("stas.use_mask", "false").compare("false");
+    m_bSaveStt = config->getConfig("database.save_stt", "false").compare("false");
 	m_Logger->debug("DBHandler Constructed.\n");
 }
 
@@ -587,7 +588,8 @@ DBHandler* DBHandler::instance(std::string dsn, std::string id, std::string pw, 
     }
 
 #ifdef USE_REDIS_POOL
-    s_dbi.CreateDBIndex("NOTIFY_STT", APHash, CACHE_TYPE_1);
+    if ( !config->getConfig("redis.use", "false").compare("true") )
+        s_dbi.CreateDBIndex("NOTIFY_STT", APHash, CACHE_TYPE_1);
 #endif
 
     return m_instance;
@@ -804,7 +806,8 @@ int DBHandler::updateCallInfo(std::string counselorcode, std::string callid, boo
 
 void DBHandler::insertSTTData(uint32_t idx, std::string callid, uint8_t spkno, uint64_t spos, uint64_t epos, std::string &stt)
 {
-	insertSTTData(new RTSTTQueItem(idx, callid, spkno, stt, spos, epos));
+    if ( m_bSaveStt )
+	    insertSTTData(new RTSTTQueItem(idx, callid, spkno, stt, spos, epos));
 }
 
 void DBHandler::insertSTTData(RTSTTQueItem * item)
@@ -851,7 +854,8 @@ int DBHandler::insertTaskInfo(std::string downloadPath, std::string filename, st
     char timebuff [32];
 
 #ifdef USE_REDIS_POOL
-    bool useRedisPool = !config->getConfig("redis.use_notify_stt", "false").compare("true");
+    bool useRedis = !config->getConfig("redis.use", "false").compare("true");
+    bool useRedisPool = useRedis & !config->getConfig("redis.use_notify_stt", "false").compare("true");
 #endif
 
     if (connSet)
@@ -1220,7 +1224,8 @@ int DBHandler::getTaskInfo(std::vector< JobInfoItem* > &v, int availableCount, c
     char rxtx[8];
 
 #ifdef USE_REDIS_POOL
-    bool useRedisPool = !config->getConfig("redis.use_notify_stt", "false").compare("true");
+    bool useRedis = !config->getConfig("redis.use", "false").compare("true");
+    bool useRedisPool = useRedis & !config->getConfig("redis.use_notify_stt", "false").compare("true");
     // check config-option
     // getTaskInfo2(), getTaskInfo()
     // 이 옵션이 설정된 경우 Redis에서만 값을 확인하고 리턴한다.
