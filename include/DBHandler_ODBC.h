@@ -207,13 +207,14 @@ private:
     static bool m_bThrdUpdateKeywords;
 #endif
 
-#ifdef USE_REDIS_POOL
-    static xRedisClient &s_xRedis;
-    static RedisDBIdx s_dbi;
-#endif
+// #ifdef USE_REDIS_POOL
+//     xRedisClient &s_xRedis;
+//     // RedisDBIdx s_dbi;
+// #endif
 
     bool m_bUseMask;
 
+    std::string m_sNotiChannel;
     bool m_bSaveStt;
 };
 

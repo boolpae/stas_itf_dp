@@ -82,8 +82,8 @@ enum {
  CACHE_TYPE_MAX,
 };
 
-xRedisClient &DBHandler::s_xRedis = RedisHandler::instance()->getRedisClient();;
-RedisDBIdx DBHandler::s_dbi(&s_xRedis);
+// xRedisClient &DBHandler::s_xRedis = RedisHandler::instance()->getRedisClient();
+// RedisDBIdx DBHandler::s_dbi(&s_xRedis);
 #endif
 
 DBHandler::DBHandler(std::string dsn,int connCount)
@@ -94,6 +94,11 @@ DBHandler::DBHandler(std::string dsn,int connCount)
     m_pInterDBConnPool = nullptr;
     m_bUseMask = config->getConfig("stas.use_mask", "false").compare("false");
     m_bSaveStt = config->getConfig("database.save_stt", "false").compare("false");
+
+#ifdef USE_REDIS_POOL
+    m_sNotiChannel = config->getConfig("redis.notichannel", "NOTIFY-STT");
+#endif
+
 	m_Logger->debug("DBHandler Constructed.\n");
 }
 
@@ -587,11 +592,6 @@ DBHandler* DBHandler::instance(std::string dsn, std::string id, std::string pw, 
         m_instance = nullptr;
     }
 
-#ifdef USE_REDIS_POOL
-    if ( !config->getConfig("redis.use", "false").compare("true") )
-        s_dbi.CreateDBIndex("NOTIFY_STT", APHash, CACHE_TYPE_1);
-#endif
-
     return m_instance;
 }
 
@@ -897,6 +897,10 @@ int DBHandler::insertTaskInfo(std::string downloadPath, std::string filename, st
                 rapidjson::Document d;
                 rapidjson::Document::AllocatorType& alloc = d.GetAllocator();
 
+                xRedisClient &s_xRedis = RedisHandler::instance()->getRedisClient();
+                RedisDBIdx s_dbi(&s_xRedis);
+                s_dbi.CreateDBIndex(m_sNotiChannel.c_str(), APHash, CACHE_TYPE_1);
+
                 d.SetObject();
 
                 d.AddMember("CALL_ID", rapidjson::Value(callId.c_str(), alloc).Move(), alloc);
@@ -915,7 +919,7 @@ int DBHandler::insertTaskInfo(std::string downloadPath, std::string filename, st
                 sJsonValue = strbuf.GetString();
                 vVal.push_back( sJsonValue );
 
-                s_xRedis.lpush( DBHandler::s_dbi, "NOTIFY_STT", vVal, zCount );
+                s_xRedis.lpush( s_dbi, m_sNotiChannel.c_str(), vVal, zCount );
                 vVal.clear();
             }
 
@@ -1238,11 +1242,15 @@ int DBHandler::getTaskInfo(std::vector< JobInfoItem* > &v, int availableCount, c
         std::string sTableName;
         int nProcNo=1;
 
-        s_xRedis.llen( DBHandler::s_dbi, "NOTIFY_STT", zCount );
+        xRedisClient &s_xRedis = RedisHandler::instance()->getRedisClient();
+        RedisDBIdx s_dbi(&s_xRedis);
+        s_dbi.CreateDBIndex(m_sNotiChannel.c_str(), APHash, CACHE_TYPE_1);
+
+        s_xRedis.llen( s_dbi, m_sNotiChannel.c_str(), zCount );
 
         if ( zCount ) {
             while (zCount) {
-                s_xRedis.rpop( DBHandler::s_dbi, "NOTIFY_STT", jsonValue );
+                s_xRedis.rpop( s_dbi, m_sNotiChannel.c_str(), jsonValue );
                 ok = d.Parse(jsonValue.c_str());
 
                 if ( ok ) {
