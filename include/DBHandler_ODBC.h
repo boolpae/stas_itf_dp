@@ -216,6 +216,10 @@ private:
 
     std::string m_sNotiChannel;
     bool m_bSaveStt;
+
+    bool m_buseRedis;
+    bool m_buseRedisPool;
+
 };
 
 

@@ -96,6 +96,8 @@ DBHandler::DBHandler(std::string dsn,int connCount)
     m_bSaveStt = config->getConfig("database.save_stt", "false").compare("false");
 
 #ifdef USE_REDIS_POOL
+    m_buseRedis = !config->getConfig("redis.use", "false").compare("true");
+    m_buseRedisPool = m_buseRedis & !config->getConfig("redis.use_notify_stt", "false").compare("true");
     m_sNotiChannel = config->getConfig("redis.notichannel", "NOTIFY-STT");
 #endif
 
@@ -853,11 +855,6 @@ int DBHandler::insertTaskInfo(std::string downloadPath, std::string filename, st
     struct tm * timeinfo;
     char timebuff [32];
 
-#ifdef USE_REDIS_POOL
-    bool useRedis = !config->getConfig("redis.use", "false").compare("true");
-    bool useRedisPool = useRedis & !config->getConfig("redis.use_notify_stt", "false").compare("true");
-#endif
-
     if (connSet)
     {
         startT = time(NULL);
@@ -889,7 +886,7 @@ int DBHandler::insertTaskInfo(std::string downloadPath, std::string filename, st
             // 채널 이름은...REQ_FILE_STT, LPUSH, 3개의 개별 작업 테이블 중 TBL_JOB_INFO에만 넣는 데이터만을 사용한다
             // Protocol...JSON
 
-            if ( useRedisPool )
+            if ( m_buseRedisPool )
             {
                 std::string sJsonValue;
                 VALUES vVal;
@@ -1228,13 +1225,11 @@ int DBHandler::getTaskInfo(std::vector< JobInfoItem* > &v, int availableCount, c
     char rxtx[8];
 
 #ifdef USE_REDIS_POOL
-    bool useRedis = !config->getConfig("redis.use", "false").compare("true");
-    bool useRedisPool = useRedis & !config->getConfig("redis.use_notify_stt", "false").compare("true");
     // check config-option
     // getTaskInfo2(), getTaskInfo()
     // 이 옵션이 설정된 경우 Redis에서만 값을 확인하고 리턴한다.
     // Redis 채널 이름은...REQ_FILE_STT, LLEN, RPOP
-    if ( useRedisPool ) {
+    if ( m_buseRedisPool ) {
         int64_t zCount=0;
         rapidjson::Document d;
         rapidjson::ParseResult ok;
@@ -1264,6 +1259,7 @@ int DBHandler::getTaskInfo(std::vector< JobInfoItem* > &v, int availableCount, c
                     nProcNo = d["PROC_NO"].GetInt();
                     JobInfoItem *item = new JobInfoItem(std::string(callid), std::to_string(counselorcode), std::string(path), std::string(filename), std::string(regdate), std::string(rxtx), sTableName, nProcNo);
                     v.push_back(item);
+                    m_Logger->debug("DBHandler::getTaskInfo() - from RedisPool CallId(%s), FileName(%s) zCount(%d)", callid, filename, zCount);
                 }
                 zCount--;
             }
