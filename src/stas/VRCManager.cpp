@@ -180,7 +180,7 @@ bool VRCManager::getGearmanFnames(std::vector<std::string> &vFnames)
 
 	disconnectGearman();
 	
-#ifdef USE_REALTIME_MF// 1 //USE_REALTIME_MT //def USE_REALTIME_POOL
+#ifndef USE_REALTIME_MF// 1 //USE_REALTIME_MT //def USE_REALTIME_POOL
 	getFnamesFromString4MT(sRes, vFnames);
 #else
 	getFnamesFromString(sRes, vFnames);
