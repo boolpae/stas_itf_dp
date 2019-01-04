@@ -52,6 +52,9 @@
 #include "rapidjson/stringbuffer.h"
 #endif
 
+#include "Utils.h"
+
+
 #define WAVE_FORMAT_UNKNOWN      0X0000;
 #define WAVE_FORMAT_PCM          0X0001;
 #define WAVE_FORMAT_MS_ADPCM     0X0002;
@@ -199,10 +202,16 @@ void VRClient::thrdMain(VRClient* client) {
     uint16_t nHeadLen=0;
 
     char timebuff [32];
+    char datebuff[32];
     struct tm * timeinfo = localtime(&client->m_tStart);
-    strftime (timebuff,sizeof(timebuff),"%Y%m%d%H:%M:%S",timeinfo);
-    std::string filename = client->m_pcm_path + "/" + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId;// + std::string("_l.wav");
+    strftime (timebuff,sizeof(timebuff),"%Y%m%d%H%M%S",timeinfo);
+    strftime (datebuff,sizeof(datebuff),"%Y%m%d",timeinfo);
+    std::string fullpath = client->m_pcm_path + "/" + client->m_sCounselCode + "/" + datebuff;
+    std::string filename = fullpath + "/" + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId;// + std::string("_l.wav");
     std::ofstream pcmFile;
+    bool bOnlyRecord = !config->getConfig("stas.only_record", "false").compare("true");
+
+    char fname[64];
 
 #ifdef FAD_FUNC
     uint8_t *vpBuf = NULL;
@@ -219,6 +228,8 @@ void VRClient::thrdMain(VRClient* client) {
     framelen = client->m_framelen * 2;
 #endif // FAD_FUNC
 
+    MakeDirectory(fullpath.c_str());
+
 #ifdef USE_REDIS_POOL
     bool useRedis = (!config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true"));
     iconv_t it;
@@ -232,6 +243,8 @@ void VRClient::thrdMain(VRClient* client) {
         it = iconv_open("UTF-8", "EUC-KR");
     }
 #endif
+
+    sprintf(fname, "%s", client->m_sFname.c_str());
 
     for(int i=0; i<2; i++) {
         //memset(wHdr[i], 0, sizeof(WAVE_HEADER));
@@ -255,9 +268,9 @@ void VRClient::thrdMain(VRClient* client) {
             std::string spker = (i == 0)?std::string("_r.wav"):std::string("_l.wav");
             // std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_") + /*std::to_string(client->m_nNumofChannel)*/spker + std::string(".wav");
             // std::ofstream pcmFile;
-            filename += spker;
+            std::string l_filename = filename + spker;
 
-            pcmFile.open(filename, ios::out | ios::trunc | ios::binary);
+            pcmFile.open(l_filename, ios::out | ios::trunc | ios::binary);
             if (pcmFile.is_open()) {
                 pcmFile.write((const char*)&wHdr[i], sizeof(WAVE_HEADER));
                 pcmFile.close();
@@ -271,7 +284,8 @@ void VRClient::thrdMain(VRClient* client) {
         vPos.push_back( stPos );
     }
     
-    
+    if ( !bOnlyRecord ) {
+
     gearClient = gearman_client_create(NULL);
     if (!gearClient) {
         //printf("\t[DEBUG] VRClient::thrdMain() - ERROR (Failed gearman_client_create - %s)\n", client->m_sCallId.c_str());
@@ -306,6 +320,8 @@ void VRClient::thrdMain(VRClient* client) {
 #endif
         return;
     }
+
+    } // only_record
     
 
 	// m_cJobType에 따라 작업 형태를 달리해야 한다. 
@@ -328,7 +344,7 @@ void VRClient::thrdMain(VRClient* client) {
         vad = fvad_new();
         if (!vad) {//} || (fvad_set_sample_rate(vad, in_info.samplerate) < 0)) {
             client->m_Logger->error("VRClient::thrdMain() - ERROR (Failed fvad_new(%s))", client->m_sCallId.c_str());
-            gearman_client_free(gearClient);
+            if ( !bOnlyRecord ) gearman_client_free(gearClient);
             WorkTracer::instance()->insertWork(client->m_sCallId, client->m_cJobType, WorkQueItem::PROCTYPE::R_FREE_WORKER);
             client->m_thrd.detach();
             delete client;
@@ -346,7 +362,7 @@ void VRClient::thrdMain(VRClient* client) {
 		// 실시간의 경우 통화가 종료되기 전까지 Queue에서 입력 데이터를 받아 처리
 		// FILE인 경우 기존과 동일하게 filename을 전달하는 방법 이용
         if (client->m_nGearTimeout) {
-            gearman_client_set_timeout(gearClient, client->m_nGearTimeout);
+            if ( !bOnlyRecord ) gearman_client_set_timeout(gearClient, client->m_nGearTimeout);
         }
         
 #if 0 // for DEBUG
@@ -421,14 +437,16 @@ void VRClient::thrdMain(VRClient* client) {
                     std::string spker = (item->spkNo == 1)?std::string("_r.wav"):std::string("_l.wav");
                     // std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_") + /*std::to_string(client->m_nNumofChannel)*/spker + std::string(".wav");
                     // std::ofstream pcmFile;
-                    filename += spker;
+                    std::string l_filename = filename + spker;
 
-                    pcmFile.open(filename, ios::out | ios::app | ios::binary);
+                    pcmFile.open(l_filename, ios::out | ios::app | ios::binary);
                     if (pcmFile.is_open()) {
                         pcmFile.write((const char*)item->voiceData, item->lenVoiceData);
                         pcmFile.close();
                     }
                 }
+
+                if ( !bOnlyRecord ) {
                 
 #ifdef FAD_FUNC
                 // check vad!, by loop()
@@ -474,7 +492,7 @@ void VRClient::thrdMain(VRClient* client) {
                                 vBuff[item->spkNo-1][i] = buf[i];
                             }
                             //client->m_Logger->debug("VRClient::thrdMain(%d, %d, %s)(%s) - send buffer buff_len(%lu), spos(%lu), epos(%lu)", nHeadLen, item->spkNo, buf, client->m_sCallId.c_str(), vBuff[item->spkNo-1].size(), sframe[item->spkNo-1], eframe[item->spkNo-1]);
-                            value= gearman_client_do(gearClient, "vr_realtime"/*client->m_sFname.c_str()*/, NULL, 
+                            value= gearman_client_do(gearClient, fname/*"vr_realtime"*//*client->m_sFname.c_str()*/, NULL, 
                                                             (const void*)&vBuff[item->spkNo-1][0], vBuff[item->spkNo-1].size(),
                                                             &result_size, &rc);
                                                             
@@ -581,6 +599,8 @@ void VRClient::thrdMain(VRClient* client) {
                     posBuf += framelen;
                 }
 
+                } // only_record
+
 #else // FAD_FUNC
 
                 value= gearman_client_do(gearClient, client->m_sFname.c_str(), NULL, 
@@ -671,6 +691,8 @@ void VRClient::thrdMain(VRClient* client) {
 					//printf("\t[DEBUG] VRClient::thrdMain(%s) - final item delivered.\n", client->m_sCallId.c_str());
                     client->m_Logger->debug("VRClient::thrdMain(%s, %d) - final item delivered.", client->m_sCallId.c_str(), item->spkNo);
 
+                    if ( !bOnlyRecord ) {
+
 #ifdef FAD_FUNC
                     // send buff to gearman
                     sprintf(buf, "%s_%d|%s|", client->m_sCallId.c_str(), item->spkNo, "LAST");
@@ -684,7 +706,7 @@ void VRClient::thrdMain(VRClient* client) {
                             vBuff[item->spkNo-1].push_back(buf[i]);
                         }
                     }
-                    value= gearman_client_do(gearClient, "vr_realtime"/*client->m_sFname.c_str()*/, NULL, 
+                    value= gearman_client_do(gearClient, fname/*"vr_realtime"*//*client->m_sFname.c_str()*/, NULL, 
                                                     (const void*)&vBuff[item->spkNo-1][0], vBuff[item->spkNo-1].size(),
                                                     &result_size, &rc);
                     if (gearman_success(rc))
@@ -784,6 +806,8 @@ void VRClient::thrdMain(VRClient* client) {
 
 #endif
 
+                    } // only_record
+
 					if (!(--client->m_nNumofChannel)) {
                         uint64_t totalVLen = totalVoiceDataLen[item->spkNo-1];
 
@@ -822,12 +846,12 @@ void VRClient::thrdMain(VRClient* client) {
                                 std::string spker = (i == 0)?std::string("_r.wav"):std::string("_l.wav");
                                 // std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_") + /*std::to_string(client->m_nNumofChannel)*/spker + std::string(".wav");
                                 // std::ofstream pcmFile;
-                                filename += spker;
+                                std::string l_filename = filename + spker;
 
                                 wHdr[i].Riff.ChunkSize = totalVoiceDataLen[i] + sizeof(WAVE_HEADER) - 8;
                                 wHdr[i].Data.ChunkSize = totalVoiceDataLen[i];
 
-                                pcmFile.open(filename, ios::in | ios::out /*| ios::ate */| ios::binary);
+                                pcmFile.open(l_filename, ios::in | ios::out /*| ios::ate */| ios::binary);
                                 if (pcmFile.is_open()) {
                                     pcmFile.seekp(0);
                                     pcmFile.write((const char*)&wHdr[i], sizeof(WAVE_HEADER));
@@ -876,7 +900,7 @@ void VRClient::thrdMain(VRClient* client) {
 		client->m_Mgr->removeVRC(client->m_sCallId);
 	}
 
-    gearman_client_free(gearClient);
+    if ( !bOnlyRecord ) gearman_client_free(gearClient);
     std::vector< PosPair >().swap(vPos);
 
 	WorkTracer::instance()->insertWork(client->m_sCallId, client->m_cJobType, WorkQueItem::PROCTYPE::R_FREE_WORKER);

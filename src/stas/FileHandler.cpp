@@ -11,6 +11,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "Utils.h"
+#include <time.h>
+
 FileHandler* FileHandler::ms_instance = NULL;
 
 FileHandler::FileHandler(std::string path/*, log4cpp::Category *logger*/)
@@ -33,7 +36,12 @@ void FileHandler::thrdMain(FileHandler * dlv)
 	std::lock_guard<std::mutex> *g;// (m_mxQue);
 	STTQueItem* item;
 	std::string sttFilename;
+    std::string fullpath;
     int ret=0;
+
+    char datebuff[32];
+    struct tm * timeinfo;
+    time_t currTm;
 
 #ifdef ENC_UTF8
     char *utf_buf = NULL;
@@ -72,17 +80,34 @@ void FileHandler::thrdMain(FileHandler * dlv)
                 ret = -1;
             }
 #endif
+            currTm = time(NULL);
+            timeinfo = localtime(&currTm);
+            strftime (datebuff,sizeof(datebuff),"%Y%m%d",timeinfo);
+            fullpath = dlv->m_sResultPath + "/" + datebuff;
+            if ( access(fullpath.c_str(), F_OK) ) {
+                MakeDirectory(fullpath.c_str());
+            }
+
 			// item으로 로직 수행
 			if (item->getJobType() == 'R') {
-				sttFilename = dlv->m_sResultPath + "/" + item->getCallId();
+				sttFilename = fullpath + "/" + item->getCallId();
                 /*
 				sttFilename += "_";
 				sttFilename += std::to_string(item->getSpkNo());
                  */
-				sttFilename += ".stt";
+                if (item->getSpkNo() == 1) {
+                    sttFilename += "_r.stt";
+                }
+                else if (item->getSpkNo() == 2) {
+                    sttFilename += "_l.stt";
+                }
+                else {
+                    sttFilename += ".stt";
+                }
+				
 			}
 			else {
-				sttFilename = dlv->m_sResultPath + "/" + item->getFilename();// dlv->m_sResultPath + "/" + item->getCallId();
+				sttFilename = fullpath + "/" + item->getFilename();// dlv->m_sResultPath + "/" + item->getCallId();
 				sttFilename += ".stt";
 			}
 			std::ofstream sttresult(sttFilename, std::ios::out | std::ios::app);

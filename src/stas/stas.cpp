@@ -130,7 +130,6 @@ int main(int argc, const char** argv)
     // RedisHandler 활성화 옵션 체크
     if (!RedisHandler::instance()) {
         logger->error("MAIN - ERROR (Failed to get RedisHandler instance)");
-        WorkTracer::release();
         delete config;
         return -1;
     }

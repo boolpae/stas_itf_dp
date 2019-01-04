@@ -52,6 +52,8 @@
 #include "rapidjson/stringbuffer.h"
 #endif
 
+#include "Utils.h"
+
 #define WAVE_FORMAT_UNKNOWN      0X0000;
 #define WAVE_FORMAT_PCM          0X0001;
 #define WAVE_FORMAT_MS_ADPCM     0X0002;
@@ -326,18 +328,27 @@ void VRClient::thrdRxProcess(VRClient* client) {
     uint64_t totalVoiceDataLen;
     size_t framelen;
     std::string svr_nm;
+    char fname[64];
 
     char timebuff [32];
+    char datebuff[32];
     struct tm * timeinfo = localtime(&client->m_tStart);
-    strftime (timebuff,sizeof(timebuff),"%Y%m%d%H:%M:%S",timeinfo);
-    std::string filename = client->m_pcm_path + "/" + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId + std::string("_r.wav");
+    strftime (timebuff,sizeof(timebuff),"%Y%m%d%H%M%S",timeinfo);
+    strftime (datebuff,sizeof(datebuff),"%Y%m%d",timeinfo);
+    std::string fullpath = client->m_pcm_path + "/" + client->m_sCounselCode + "/" + datebuff;
+    std::string filename = fullpath + "/" + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId + std::string("_r.wav");
     std::ofstream pcmFile;
+    bool bOnlyRecord = !config->getConfig("stas.only_record", "false").compare("true");
 
     auto search = client->ThreadInfoTable[client->m_sCallId];
 
     vBuff.reserve(MM_SIZE);
+
+    MakeDirectory(fullpath.c_str());
     
     framelen = client->m_framelen * 2;
+
+    sprintf(fname, "%s", client->m_sFname.c_str());
 
 #ifdef USE_REDIS_POOL
     bool useRedis = (!config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true"));
@@ -384,6 +395,8 @@ void VRClient::thrdRxProcess(VRClient* client) {
     stPos.epos = 0;
     
     
+    if ( !bOnlyRecord ) {
+
     gearClient = gearman_client_create(NULL);
     if (!gearClient) {
         //printf("\t[DEBUG] VRClient::thrdRxProcess() - ERROR (Failed gearman_client_create - %s)\n", client->m_sCallId.c_str());
@@ -412,6 +425,8 @@ void VRClient::thrdRxProcess(VRClient* client) {
         // delete client;
         return;
     }
+
+    } // only_record
     
 
 	// m_cJobType에 따라 작업 형태를 달리해야 한다. 
@@ -424,11 +439,10 @@ void VRClient::thrdRxProcess(VRClient* client) {
         vad = fvad_new();
         if (!vad) {//} || (fvad_set_sample_rate(vad, in_info.samplerate) < 0)) {
             client->m_Logger->error("VRClient::thrdRxProcess() - ERROR (Failed fvad_new(%s))", client->m_sCallId.c_str());
-            gearman_client_free(gearClient);
+            if ( !bOnlyRecord ) gearman_client_free(gearClient);
             // WorkTracer::instance()->insertWork(client->m_sCallId, client->m_cJobType, WorkQueItem::PROCTYPE::R_FREE_WORKER);
             search->setRxState(0);// client->m_RxState = 0;
             // std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            gearman_client_free(gearClient);
             // client->m_thrdRx.detach();
             // delete client;
             return;
@@ -438,7 +452,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
 		// 실시간의 경우 통화가 종료되기 전까지 Queue에서 입력 데이터를 받아 처리
 		// FILE인 경우 기존과 동일하게 filename을 전달하는 방법 이용
         if (client->m_nGearTimeout) {
-            gearman_client_set_timeout(gearClient, client->m_nGearTimeout);
+            if ( !bOnlyRecord ) gearman_client_set_timeout(gearClient, client->m_nGearTimeout);
         }
         
 #if 0 // for DEBUG
@@ -506,6 +520,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
                     }
                 }
                 
+                if ( !bOnlyRecord ) {
                 // check vad!, by loop()
                 // if finish check vad and vBuff is no empty, send buff to VR by gearman
                 // vadres == 1 vBuff[item->spkNo-1].push_back();
@@ -623,7 +638,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
                             //client->m_Logger->debug("VRClient::thrdMain(%d, %d, %s)(%s) - send buffer buff_len(%lu), spos(%lu), epos(%lu)", nHeadLen, item->spkNo, buf, client->m_sCallId.c_str(), vBuff[item->spkNo-1].size(), client->rx_sframe[item->spkNo-1], client->rx_eframe[item->spkNo-1]);
 
                             // auto d1 = std::chrono::high_resolution_clock::now();
-                            value= gearman_client_do(gearClient, "vr_realtime", NULL, 
+                            value= gearman_client_do(gearClient, fname/*"vr_realtime"*/, NULL, 
                                                             (const void*)&vBuff[0], vBuff.size(),
                                                             &result_size, &rc);
                                                             
@@ -742,9 +757,13 @@ void VRClient::thrdRxProcess(VRClient* client) {
                     before_vadres = vadres;
                 }
 
+                } // only_record
+
 				if (!item->flag) {	// 호가 종료되었음을 알리는 flag, 채널 갯수와 flag(0)이 들어온 갯수를 비교해야한다.
 					//printf("\t[DEBUG] VRClient::thrdRxProcess(%s) - final item delivered.\n", client->m_sCallId.c_str());
                     client->m_Logger->debug("VRClient::thrdRxProcess(%s, %d) - final item delivered.", client->m_sCallId.c_str(), item->spkNo);
+
+                    if ( !bOnlyRecord ) {
 
                     // send buff to gearman
                     sprintf(buf, "%s_%d|%s|", client->m_sCallId.c_str(), item->spkNo, "LAST");
@@ -758,7 +777,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
                             vBuff.push_back(buf[i]);
                         }
                     }
-                    value= gearman_client_do(gearClient, "vr_realtime", NULL, 
+                    value= gearman_client_do(gearClient, fname/*"vr_realtime"*/, NULL, 
                                                     (const void*)&vBuff[0], vBuff.size(),
                                                     &result_size, &rc);
                     if (gearman_success(rc))
@@ -852,6 +871,8 @@ void VRClient::thrdRxProcess(VRClient* client) {
                         client->m_Logger->error("VRClient::thrdRxProcess(%s) - failed gearman_client_do(). [%d : %d], timeout(%d)", client->m_sCallId.c_str(), client->rx_sframe, client->rx_eframe, client->m_nGearTimeout);
                     }
 
+                    } // only_record
+
                     // and clear buff, set msg header
                     vBuff.clear();
 
@@ -900,7 +921,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
 #endif
 	}
 
-    gearman_client_free(gearClient);
+    if ( !bOnlyRecord ) gearman_client_free(gearClient);
 
 #ifdef USE_REDIS_POOL
     if ( useRedis ) 
@@ -908,7 +929,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
 #endif
 
     // search->setRxState(0);// client->m_RxState = 0;
-    // client->m_Logger->debug("VRClient::thrdRxProcess(%s) - RxState(%d)", client->m_sCallId.c_str(), search->getRxState());
+    client->m_Logger->debug("VRClient::thrdRxProcess(%s) - RxState(%d)", client->m_sCallId.c_str(), search->getRxState());
     // std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	// client->m_thrdRx.detach();
 	// delete client;
@@ -938,18 +959,27 @@ void VRClient::thrdTxProcess(VRClient* client) {
     uint64_t totalVoiceDataLen;
     size_t framelen;
     std::string svr_nm;
+    char fname[64];
 
     char timebuff [32];
+    char datebuff[32];
     struct tm * timeinfo = localtime(&client->m_tStart);
-    strftime (timebuff,sizeof(timebuff),"%Y%m%d%H:%M:%S",timeinfo);
-    std::string filename = client->m_pcm_path + "/" + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId + std::string("_l.wav");
+    strftime (timebuff,sizeof(timebuff),"%Y%m%d%H%M%S",timeinfo);
+    strftime (datebuff,sizeof(datebuff),"%Y%m%d",timeinfo);
+    std::string fullpath = client->m_pcm_path + "/" + client->m_sCounselCode + "/" + datebuff;
+    std::string filename = fullpath + "/" + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId + std::string("_r.wav");
     std::ofstream pcmFile;
+    bool bOnlyRecord = !config->getConfig("stas.only_record", "false").compare("true");
 
     auto search = client->ThreadInfoTable[client->m_sCallId];
 
     vBuff.reserve(MM_SIZE);
+
+    MakeDirectory(fullpath.c_str());
     
     framelen = client->m_framelen * 2;
+
+    sprintf(fname, "%s", client->m_sFname.c_str());
 
 #ifdef USE_REDIS_POOL
     bool useRedis = (!config->getConfig("redis.use", "false").compare("true") & !config->getConfig("redis.send_rt_stt", "false").compare("true"));
@@ -992,6 +1022,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
     stPos.bpos = 0;
     stPos.epos = 0;
     
+    if ( !bOnlyRecord ) {
     
     gearClient = gearman_client_create(NULL);
     if (!gearClient) {
@@ -1021,6 +1052,8 @@ void VRClient::thrdTxProcess(VRClient* client) {
         // delete client;
         return;
     }
+
+    } // only_record
     
 
 	// m_cJobType에 따라 작업 형태를 달리해야 한다. 
@@ -1033,11 +1066,10 @@ void VRClient::thrdTxProcess(VRClient* client) {
         vad = fvad_new();
         if (!vad) {//} || (fvad_set_sample_rate(vad, in_info.samplerate) < 0)) {
             client->m_Logger->error("VRClient::thrdTxProcess() - ERROR (Failed fvad_new(%s))", client->m_sCallId.c_str());
-            gearman_client_free(gearClient);
+            if ( !bOnlyRecord ) gearman_client_free(gearClient);
             // WorkTracer::instance()->insertWork(client->m_sCallId, client->m_cJobType, WorkQueItem::PROCTYPE::R_FREE_WORKER);
             search->setTxState(0);// client->m_TxState = 0;
             // std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            gearman_client_free(gearClient);
             // client->m_thrdTx.detach();
             // delete client;
             return;
@@ -1047,7 +1079,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
 		// 실시간의 경우 통화가 종료되기 전까지 Queue에서 입력 데이터를 받아 처리
 		// FILE인 경우 기존과 동일하게 filename을 전달하는 방법 이용
         if (client->m_nGearTimeout) {
-            gearman_client_set_timeout(gearClient, client->m_nGearTimeout);
+            if ( !bOnlyRecord ) gearman_client_set_timeout(gearClient, client->m_nGearTimeout);
         }
         
 #if 0 // for DEBUG
@@ -1114,6 +1146,8 @@ void VRClient::thrdTxProcess(VRClient* client) {
                         pcmFile.close();
                     }
                 }
+
+                if ( !bOnlyRecord ) {
                 
                 // check vad!, by loop()
                 // if finish check vad and vBuff is no empty, send buff to VR by gearman
@@ -1229,7 +1263,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
                                 vBuff[i] = buf[i];
                             }
                             //client->m_Logger->debug("VRClient::thrdMain(%d, %d, %s)(%s) - send buffer buff_len(%lu), spos(%lu), epos(%lu)", nHeadLen, item->spkNo, buf, client->m_sCallId.c_str(), vBuff[item->spkNo-1].size(), client->tx_sframe[item->spkNo-1], client->tx_eframe[item->spkNo-1]);
-                            value= gearman_client_do(gearClient, "vr_realtime", NULL, 
+                            value= gearman_client_do(gearClient, fname/*"vr_realtime"*/, NULL, 
                                                             (const void*)&vBuff[0], vBuff.size(),
                                                             &result_size, &rc);
                                                             
@@ -1341,9 +1375,13 @@ void VRClient::thrdTxProcess(VRClient* client) {
                     before_vadres = vadres;
                 }
 
+                } // only_record
+
 				if (!item->flag) {	// 호가 종료되었음을 알리는 flag, 채널 갯수와 flag(0)이 들어온 갯수를 비교해야한다.
 					//printf("\t[DEBUG] VRClient::thrdTxProcess(%s) - final item delivered.\n", client->m_sCallId.c_str());
                     client->m_Logger->debug("VRClient::thrdTxProcess(%s, %d) - final item delivered.", client->m_sCallId.c_str(), item->spkNo);
+
+                    if ( !bOnlyRecord ) {
 
                     // send buff to gearman
                     sprintf(buf, "%s_%d|%s|", client->m_sCallId.c_str(), item->spkNo, "LAST");
@@ -1357,7 +1395,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
                             vBuff.push_back(buf[i]);
                         }
                     }
-                    value= gearman_client_do(gearClient, "vr_realtime", NULL, 
+                    value= gearman_client_do(gearClient, fname/*"vr_realtime"*/, NULL, 
                                                     (const void*)&vBuff[0], vBuff.size(),
                                                     &result_size, &rc);
                     if (gearman_success(rc))
@@ -1443,6 +1481,8 @@ void VRClient::thrdTxProcess(VRClient* client) {
                         client->m_Logger->error("VRClient::thrdTxProcess(%s) - failed gearman_client_do(). [%d : %d], timeout(%d)", client->m_sCallId.c_str(), client->tx_sframe, client->tx_eframe, client->m_nGearTimeout);
                     }
 
+                    } // only_record
+
                     // and clear buff, set msg header
                     vBuff.clear();
 
@@ -1490,7 +1530,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
 #endif
 	}
 
-    gearman_client_free(gearClient);
+    if ( !bOnlyRecord ) gearman_client_free(gearClient);
 
 #ifdef USE_REDIS_POOL
     if ( useRedis )
@@ -1498,7 +1538,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
 #endif
 
     // search->setTxState(0);// client->m_TxState = 0;
-    // client->m_Logger->debug("VRClient::thrdTxProcess(%s) - TxState(%d)", client->m_sCallId.c_str(), search->getTxState());
+    client->m_Logger->debug("VRClient::thrdTxProcess(%s) - TxState(%d)", client->m_sCallId.c_str(), search->getTxState());
     // std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	// client->m_thrdTx.detach();
 }

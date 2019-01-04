@@ -48,6 +48,8 @@ VRCManager::VRCManager(int geartimeout, FileHandler *deliver, /*log4cpp::Categor
     else m_framelen = 20;
 
 	m_mode = mode;
+
+	m_bOnlyRecord = !config->getConfig("stas.only_record", "false").compare("true");
 }
 
 
@@ -109,6 +111,16 @@ bool VRCManager::getGearmanFnames(std::vector<std::string> &vFnames)
 	struct timeval tv;
 	fd_set rfds;
 	int selVal;
+	char fname[64];
+
+	// 녹취만 할 경우...
+	if ( m_bOnlyRecord ) {
+		for(int i=0; i<300; i++) {
+			sprintf(fname, "vr_realtime_%d", i);
+			vFnames.push_back(std::string(fname));
+		}
+		return true;
+	}
 
 	RECONNECT:
 	if (!m_nSockGearman && !connectGearman()) {
@@ -168,7 +180,7 @@ bool VRCManager::getGearmanFnames(std::vector<std::string> &vFnames)
 
 	disconnectGearman();
 	
-#if 1 //USE_REALTIME_MT //def USE_REALTIME_POOL
+#ifdef USE_REALTIME_MF// 1 //USE_REALTIME_MT //def USE_REALTIME_POOL
 	getFnamesFromString4MT(sRes, vFnames);
 #else
 	getFnamesFromString(sRes, vFnames);
@@ -308,7 +320,11 @@ int16_t VRCManager::requestVRC(string& callid, string& counselcode, time_t &star
 
 	if (iter != vFnames.end()) {
 		startT = time(NULL);
-		client = new VRClient(ms_instance, this->m_sGearHost, this->m_nGearPort, this->m_GearTimeout, *iter, callid, counselcode, jobType, noc, m_deliver, /*m_Logger,*/ m_s2d, m_is_save_pcm, m_pcm_path, m_framelen, m_mode, startT); // or VRClient(this);
+		std::string fname = *iter;
+#ifndef USE_REALTIME_MF
+		fname = "vr_realtime";
+#endif
+		client = new VRClient(ms_instance, this->m_sGearHost, this->m_nGearPort, this->m_GearTimeout, fname/**iter*/, callid, counselcode, jobType, noc, m_deliver, /*m_Logger,*/ m_s2d, m_is_save_pcm, m_pcm_path, m_framelen, m_mode, startT); // or VRClient(this);
 
 		if (client) {
 			std::lock_guard<std::mutex> g(m_mxMap);
