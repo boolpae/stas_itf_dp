@@ -206,8 +206,8 @@ void VRClient::thrdMain(VRClient* client) {
     struct tm * timeinfo = localtime(&client->m_tStart);
     strftime (timebuff,sizeof(timebuff),"%Y%m%d%H%M%S",timeinfo);
     strftime (datebuff,sizeof(datebuff),"%Y%m%d",timeinfo);
-    std::string fullpath = client->m_pcm_path + "/" + client->m_sCounselCode + "/" + datebuff;
-    std::string filename = fullpath + "/" + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId;// + std::string("_l.wav");
+    std::string fullpath = client->m_pcm_path + "/" + client->m_sCounselCode + "/" + datebuff + "/";
+    std::string filename = fullpath + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId;// + std::string("_l.wav");
     std::ofstream pcmFile;
     bool bOnlyRecord = !config->getConfig("stas.only_record", "false").compare("true");
 

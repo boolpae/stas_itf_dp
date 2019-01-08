@@ -52,7 +52,7 @@ FLAGS			+= -DENABLE_REALTIME # 실시간 기능 활성화 Flag
 ifeq ($(USE_REDIS), "TRUE")
 FLAGS			+= -DUSE_REDIS_POOL # 실시간 기능에서 필요로 하며 redis로 실시간 결과를 전송
 endif
-ifeq ($(USE_REALTIME_MT), "TRUE")
+ifeq ($(USE_REALTIME_MF), "TRUE")
 FLAGS			+= -DUSE_REALTIME_MF # 실시간 Gearman Multi Function Name 사용
 endif
 ifeq ($(USE_REALTIME_MT), "TRUE")

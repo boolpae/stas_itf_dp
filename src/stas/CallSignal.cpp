@@ -254,7 +254,7 @@ void Protocol::CallSignal::setPacCounselorCode(uint8_t * counselorcode, uint16_t
 void Protocol::CallSignal::setPacCallId(uint8_t * callid, uint16_t len)
 {
 	memset(pacCallId, 0x00, sizeof(pacCallId));
-	if (len > 32) len = 32;
+	if (len > LEN_CALL_ID) len = LEN_CALL_ID;
 	memcpy(pacCallId, callid, len);
 	//printf("\t[DEBUG] CallSignal::setPacCallId() - Call-ID(%s : %s), Len(%d)\n", callid, pacCallId, len);
     m_Logger->debug("CallSignal::setPacCallId() - Call-ID(%s : %s), Len(%d)", callid, pacCallId, len);

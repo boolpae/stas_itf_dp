@@ -11,8 +11,10 @@
 #define PROTO_AUTH_TOKEN "RT-STT"
 #define PROTO_AUTH_TOKEN_LEN 6
 
-#define CALL_BEG_PACKET_LEN 240
-#define CALL_END_PACKET_LEN 233
+#define LEN_CALL_ID 128
+
+#define CALL_BEG_PACKET_LEN (112+LEN_CALL_ID)
+#define CALL_END_PACKET_LEN (105+LEN_CALL_ID)
 #define CALL_PACKET_HEADER_LEN 8
 #define CALL_BEG_PACKET_BODY_LEN (CALL_BEG_PACKET_LEN - CALL_PACKET_HEADER_LEN)
 #define CALL_END_PACKET_BODY_LEN (CALL_END_PACKET_LEN - CALL_PACKET_HEADER_LEN)
@@ -28,7 +30,7 @@ namespace Protocol {
 		uint16_t pacSize;		// 패킷 전체 길이 값
 		uint8_t pacFlag;		// 호 시작('B'), 호 종료('E')
 		uint8_t pacCounselorCode[33];
-		uint8_t pacCallId[129];	// unique한 값, 키로 사용되는 값이며 문자열
+		uint8_t pacCallId[LEN_CALL_ID+1];	// unique한 값, 키로 사용되는 값이며 문자열
 		uint8_t pacUdpCnt;		// 실시간 음성 전달을 위해 요청한 채널 갯수
         int32_t pacSampleRate;
         uint8_t pacChnCnt;

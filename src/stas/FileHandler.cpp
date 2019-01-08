@@ -83,14 +83,14 @@ void FileHandler::thrdMain(FileHandler * dlv)
             currTm = time(NULL);
             timeinfo = localtime(&currTm);
             strftime (datebuff,sizeof(datebuff),"%Y%m%d",timeinfo);
-            fullpath = dlv->m_sResultPath + "/" + datebuff;
+            fullpath = dlv->m_sResultPath + "/" + datebuff + "/";
             if ( access(fullpath.c_str(), F_OK) ) {
                 MakeDirectory(fullpath.c_str());
             }
 
 			// item으로 로직 수행
 			if (item->getJobType() == 'R') {
-				sttFilename = fullpath + "/" + item->getCallId();
+				sttFilename = fullpath + item->getCallId();
                 /*
 				sttFilename += "_";
 				sttFilename += std::to_string(item->getSpkNo());
@@ -107,7 +107,7 @@ void FileHandler::thrdMain(FileHandler * dlv)
 				
 			}
 			else {
-				sttFilename = fullpath + "/" + item->getFilename();// dlv->m_sResultPath + "/" + item->getCallId();
+				sttFilename = fullpath + item->getFilename();// dlv->m_sResultPath + "/" + item->getCallId();
 				sttFilename += ".stt";
 			}
 			std::ofstream sttresult(sttFilename, std::ios::out | std::ios::app);

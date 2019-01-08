@@ -198,7 +198,7 @@ void HAManager::thrdStandby(HAManager *mgr, int standbysock)
             else {
                 int nSignalCount=0;
                 char cSigType;
-                char sCallId[33];
+                char sCallId[129];
                 char sCounselCode[33];
                 char sFuncName[33];
                 uint16_t port1;
@@ -206,7 +206,7 @@ void HAManager::thrdStandby(HAManager *mgr, int standbysock)
                 memcpy(&nBodyLen, buff+4, sizeof(uint16_t));
                 nBodyLen = ntohs(nBodyLen);
 
-                nSignalCount = nBodyLen/75;
+                nSignalCount = nBodyLen/203;
                 sRecvString.clear();
                 while(nBodyLen && (msg_size = read(standbysock, buff, sizeof(buff)-1))) {
                     buff[msg_size] = 0;
@@ -217,8 +217,8 @@ void HAManager::thrdStandby(HAManager *mgr, int standbysock)
                 if (nSignalCount > 0) {
                     for(int i=0; i<nSignalCount; i++) {
                         memset(buff, 0, sizeof(buff));
-                        memcpy(buff, sRecvString.c_str() + (i * 75), 75);
-                        sscanf(buff, "%c%32s%32s%32s%5hd%5hd", &cSigType, sCallId, sCounselCode, sFuncName, &port1, &port2);
+                        memcpy(buff, sRecvString.c_str() + (i * 203), 203);
+                        sscanf(buff, "%c%128s%32s%32s%5hd%5hd", &cSigType, sCallId, sCounselCode, sFuncName, &port1, &port2);
 
                         if (cSigType == 'A') { // Add SignalItem
                             SyncItem *item = new SyncItem(cSigType, std::string(sCallId), std::string(sCounselCode), std::string(sFuncName), port1, port2);
@@ -428,15 +428,15 @@ void HAManager::thrdActive(HAManager *mgr)
 
                 memset(buff, 0, sizeof(buff));
                 memcpy(buff, "STAS", 4);
-                nBodyLen = htons(mgr->m_mSyncTable.size() * 75);
+                nBodyLen = htons(mgr->m_mSyncTable.size() * 203);
                 memcpy(buff+4, &nBodyLen, sizeof(uint16_t));
 
                 len = -1;   // initialize
                 if ( mgr->m_mSyncTable.size() && ((len=write(client_fd, buff, 4+sizeof(uint16_t))) > 0) ) {
                     for(iter = mgr->m_mSyncTable.begin(); iter != mgr->m_mSyncTable.end(); iter++) {
                         syncItem = iter->second;
-                        sprintf(buff, "%c%-32s%-32s%-32s%-5hd%-5hd", (syncItem->m_bSignalType?'A':'R'),syncItem->m_sCallId.c_str(),syncItem->m_sCounselCode.c_str(), syncItem->m_sFuncName.c_str(), syncItem->m_n1port, syncItem->m_n2port);
-                        if (write(client_fd, buff, 75) <= 0) break;
+                        sprintf(buff, "%c%-128s%-32s%-32s%-5hd%-5hd", (syncItem->m_bSignalType?'A':'R'),syncItem->m_sCallId.c_str(),syncItem->m_sCounselCode.c_str(), syncItem->m_sFuncName.c_str(), syncItem->m_n1port, syncItem->m_n2port);
+                        if (write(client_fd, buff, 203) <= 0) break;
                     }
 
                     if (iter != mgr->m_mSyncTable.end()) {
@@ -519,9 +519,9 @@ void HAManager::thrdSender(HAManager *mgr, int sockfd)
 
             memset(buff, 0, sizeof(buff));
             memcpy(buff, "STAS", 4);
-            nLen = htons(75);
+            nLen = htons(203);
             memcpy(buff+4, &nLen, sizeof(uint16_t));
-            sprintf(buff+6, "%c%-32s%-32s%-32s%-5hd%-5hd", (item->m_bSignalType?'A':'R'), item->m_sCallId.c_str(), item->m_sCounselCode.c_str(), item->m_sFuncName.c_str(), item->m_n1port, item->m_n2port);
+            sprintf(buff+6, "%c%-128s%-32s%-32s%-5hd%-5hd", (item->m_bSignalType?'A':'R'), item->m_sCallId.c_str(), item->m_sCounselCode.c_str(), item->m_sFuncName.c_str(), item->m_n1port, item->m_n2port);
             write(sockfd, buff, 79+sizeof(uint16_t));
             if (item->m_bSignalType) {
 #ifdef LOG4CPP
