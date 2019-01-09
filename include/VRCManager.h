@@ -76,14 +76,15 @@ public:
 private:
 	VRCManager(int geartimeout, FileHandler *deliver, DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen, int mode);
 	virtual ~VRCManager();
-
+#ifndef USE_ITF_DP
 	bool connectGearman();
     void disconnectGearman();
 	bool getGearmanFnames(std::vector< std::string > &vFnames);
 	void getFnamesFromString(std::string &gearResult, std::vector< std::string > &vFnames);
+	void getFnamesFromString4MT(std::string & gearResult, std::vector<std::string>& vFnames);
+#endif
 	void setGearHost(string host) { m_sGearHost = host; }
 	void setGearPort(uint16_t port) { m_nGearPort = port; }
-	void getFnamesFromString4MT(std::string & gearResult, std::vector<std::string>& vFnames);
 
 };
 

@@ -23,8 +23,10 @@
 
 #include <boost/algorithm/string/replace.hpp>
 
+#ifndef USE_ITF_DP
 // For Gearman
 #include <libgearman/gearman.h>
+#endif // USE_ITF_DP
 
 #ifdef FAD_FUNC
 
@@ -307,11 +309,15 @@ void VRClient::thrdMain(VRClient* client) {
 void VRClient::thrdRxProcess(VRClient* client) {
 
 	QueItem* item;
+#ifdef USE_ITF_DP
+    ITF_DP_Client *sttClient;
+#else
     gearman_client_st *gearClient;
     gearman_return_t ret;
+    gearman_return_t rc;
+#endif // USE_ITF_DP
     void *value = NULL;
     size_t result_size;
-    gearman_return_t rc;
     PosPair stPos;
     WAVE_HEADER wHdr;
     
@@ -335,7 +341,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
     struct tm * timeinfo = localtime(&client->m_tStart);
     strftime (timebuff,sizeof(timebuff),"%Y%m%d%H%M%S",timeinfo);
     strftime (datebuff,sizeof(datebuff),"%Y%m%d",timeinfo);
-    std::string fullpath = client->m_pcm_path + "/" + client->m_sCounselCode + "/" + datebuff + "/";
+    std::string fullpath = client->m_pcm_path + "/" + datebuff + "/" + client->m_sCounselCode + "/";
     std::string filename = fullpath + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId + std::string("_r.wav");
     std::ofstream pcmFile;
     bool bOnlyRecord = !config->getConfig("stas.only_record", "false").compare("true");
@@ -397,6 +403,9 @@ void VRClient::thrdRxProcess(VRClient* client) {
     
     if ( !bOnlyRecord ) {
 
+#ifdef USE_ITF_DP
+    sttClient = gDpBroker->requestWorker(client->m_sFname);
+#else
     gearClient = gearman_client_create(NULL);
     if (!gearClient) {
         //printf("\t[DEBUG] VRClient::thrdRxProcess() - ERROR (Failed gearman_client_create - %s)\n", client->m_sCallId.c_str());
@@ -425,7 +434,7 @@ void VRClient::thrdRxProcess(VRClient* client) {
         // delete client;
         return;
     }
-
+#endif // USE_ITF_DP
     } // only_record
     
 
@@ -439,7 +448,14 @@ void VRClient::thrdRxProcess(VRClient* client) {
         vad = fvad_new();
         if (!vad) {//} || (fvad_set_sample_rate(vad, in_info.samplerate) < 0)) {
             client->m_Logger->error("VRClient::thrdRxProcess() - ERROR (Failed fvad_new(%s))", client->m_sCallId.c_str());
-            if ( !bOnlyRecord ) gearman_client_free(gearClient);
+            if ( !bOnlyRecord ) 
+            {
+#ifdef USE_ITF_DP
+                gDpBroker->restoreWorker(sttClient);
+#else
+                gearman_client_free(gearClient);
+#endif // USE_ITF_DP
+            }
             // WorkTracer::instance()->insertWork(client->m_sCallId, client->m_cJobType, WorkQueItem::PROCTYPE::R_FREE_WORKER);
             search->setRxState(0);// client->m_RxState = 0;
             // std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -451,10 +467,12 @@ void VRClient::thrdRxProcess(VRClient* client) {
 
 		// 실시간의 경우 통화가 종료되기 전까지 Queue에서 입력 데이터를 받아 처리
 		// FILE인 경우 기존과 동일하게 filename을 전달하는 방법 이용
+#ifndef USE_ITF_DP
         if (client->m_nGearTimeout) {
             if ( !bOnlyRecord ) gearman_client_set_timeout(gearClient, client->m_nGearTimeout);
         }
-        
+#endif // USE_ITF_DP
+
 #if 0 // for DEBUG
 		std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_") + std::to_string(client->m_nNumofChannel) + std::string(".pcm");
 		std::ofstream pcmFile;
@@ -638,15 +656,23 @@ void VRClient::thrdRxProcess(VRClient* client) {
                             //client->m_Logger->debug("VRClient::thrdMain(%d, %d, %s)(%s) - send buffer buff_len(%lu), spos(%lu), epos(%lu)", nHeadLen, item->spkNo, buf, client->m_sCallId.c_str(), vBuff[item->spkNo-1].size(), client->rx_sframe[item->spkNo-1], client->rx_eframe[item->spkNo-1]);
 
                             // auto d1 = std::chrono::high_resolution_clock::now();
+#ifdef USE_ITF_DP
+                            result_size = sttClient->requestJob((void*)&vBuff[0], vBuff.size());
+                            value = (void *)sttClient->getValue();
+#else
                             value= gearman_client_do(gearClient, fname/*"vr_realtime"*/, NULL, 
                                                             (const void*)&vBuff[0], vBuff.size(),
                                                             &result_size, &rc);
+#endif // USE_ITF_DP
                                                             
                             aDianum++;
                             // auto d2 = std::chrono::high_resolution_clock::now();
                             // client->m_Logger->debug("VRClient::thrdRxProcess(%s) - stt working msecs(%d)", client->m_sCallId.c_str(), std::chrono::duration_cast<std::chrono::milliseconds>(d2-d1).count());
-                            
+#ifdef USE_ITF_DP
+                            if ( result_size > 0)
+#else
                             if (gearman_success(rc))
+#endif // USE_ITF_DP
                             {
                                 // Make use of value
                                 if (value) {
@@ -722,12 +748,16 @@ void VRClient::thrdRxProcess(VRClient* client) {
                                     if (client->m_deliver) {
                                         client->m_deliver->insertSTT(client->m_sCallId, modValue, item->spkNo, client->rx_sframe/10, client->rx_eframe/10);
                                     }
-
+#ifndef USE_ITF_DP
                                     free(value);
-                                    
+#endif // USE_ITF_DP                  
                                 }
                             }
-                            else if (gearman_failed(rc)){
+                            else 
+#ifndef USE_ITF_DP
+                            if (gearman_failed(rc))
+#endif // USE_ITF_DP
+                            {
                                 client->m_Logger->error("VRClient::thrdRxProcess(%s) - failed gearman_client_do(). [%lu : %lu], timeout(%d)", client->m_sCallId.c_str(), client->rx_sframe, client->rx_eframe, client->m_nGearTimeout);
                             }
                         }
@@ -777,16 +807,23 @@ void VRClient::thrdRxProcess(VRClient* client) {
                             vBuff.push_back(buf[i]);
                         }
                     }
+#ifdef USE_ITF_DP
+                    result_size = sttClient->requestJob((void*)&vBuff[0], vBuff.size());
+                    value = (void *)sttClient->getValue();
+
+                    if ( result_size > 0)
+#else
                     value= gearman_client_do(gearClient, fname/*"vr_realtime"*/, NULL, 
                                                     (const void*)&vBuff[0], vBuff.size(),
                                                     &result_size, &rc);
                     if (gearman_success(rc))
+#endif // USE_ITF_DP
                     {
                         std::string svalue = (const char*)value;
                         svr_nm = svalue.substr(0, svalue.find("\n"));
-
+#ifndef USE_ITF_DP
                         free(value);
-
+#endif // USE_ITF_DP
                         svalue.erase(0, svalue.find("\n")+1);
                         // Make use of value
                         if (svr_nm.size() && svalue.size()) {
@@ -867,7 +904,11 @@ void VRClient::thrdRxProcess(VRClient* client) {
                             
                         }
                     }
-                    else if (gearman_failed(rc)){
+                    else
+#ifndef USE_ITF_DP
+                    if (gearman_failed(rc))
+#endif // USE_ITF_DP
+                    {
                         client->m_Logger->error("VRClient::thrdRxProcess(%s) - failed gearman_client_do(). [%d : %d], timeout(%d)", client->m_sCallId.c_str(), client->rx_sframe, client->rx_eframe, client->m_nGearTimeout);
                     }
 
@@ -921,7 +962,14 @@ void VRClient::thrdRxProcess(VRClient* client) {
 #endif
 	}
 
-    if ( !bOnlyRecord ) gearman_client_free(gearClient);
+    if ( !bOnlyRecord )
+    {
+#ifdef USE_ITF_DP
+        gDpBroker->restoreWorker(sttClient);
+#else
+        gearman_client_free(gearClient);
+#endif // USE_ITF_DP
+    }
 
 #ifdef USE_REDIS_POOL
     if ( useRedis ) 
@@ -938,11 +986,15 @@ void VRClient::thrdRxProcess(VRClient* client) {
 void VRClient::thrdTxProcess(VRClient* client) {
 
 	QueItem* item;
+#ifdef USE_ITF_DP
+    ITF_DP_Client *sttClient;
+#else
     gearman_client_st *gearClient;
     gearman_return_t ret;
+    gearman_return_t rc;
+#endif // USE_ITF_DP
     void *value = NULL;
     size_t result_size;
-    gearman_return_t rc;
     PosPair stPos;
     WAVE_HEADER wHdr;
     
@@ -966,7 +1018,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
     struct tm * timeinfo = localtime(&client->m_tStart);
     strftime (timebuff,sizeof(timebuff),"%Y%m%d%H%M%S",timeinfo);
     strftime (datebuff,sizeof(datebuff),"%Y%m%d",timeinfo);
-    std::string fullpath = client->m_pcm_path + "/" + client->m_sCounselCode + "/" + datebuff + "/";
+    std::string fullpath = client->m_pcm_path + "/" + datebuff + "/" + client->m_sCounselCode + "/";
     std::string filename = fullpath + client->m_sCounselCode + "_" + timebuff + "_" + client->m_sCallId + std::string("_l.wav");
     std::ofstream pcmFile;
     bool bOnlyRecord = !config->getConfig("stas.only_record", "false").compare("true");
@@ -1024,6 +1076,9 @@ void VRClient::thrdTxProcess(VRClient* client) {
     
     if ( !bOnlyRecord ) {
     
+#ifdef USE_ITF_DP
+    sttClient = gDpBroker->requestWorker(client->m_sFname);
+#else
     gearClient = gearman_client_create(NULL);
     if (!gearClient) {
         //printf("\t[DEBUG] VRClient::thrdTxProcess() - ERROR (Failed gearman_client_create - %s)\n", client->m_sCallId.c_str());
@@ -1052,7 +1107,7 @@ void VRClient::thrdTxProcess(VRClient* client) {
         // delete client;
         return;
     }
-
+#endif // USE_ITF_DP
     } // only_record
     
 
@@ -1066,7 +1121,15 @@ void VRClient::thrdTxProcess(VRClient* client) {
         vad = fvad_new();
         if (!vad) {//} || (fvad_set_sample_rate(vad, in_info.samplerate) < 0)) {
             client->m_Logger->error("VRClient::thrdTxProcess() - ERROR (Failed fvad_new(%s))", client->m_sCallId.c_str());
-            if ( !bOnlyRecord ) gearman_client_free(gearClient);
+            if ( !bOnlyRecord )
+            {
+#ifdef USE_ITF_DP
+                gDpBroker->restoreWorker(sttClient);
+#else
+                gearman_client_free(gearClient);
+#endif // USE_ITF_DP
+            }
+            //if ( !bOnlyRecord ) gearman_client_free(gearClient);
             // WorkTracer::instance()->insertWork(client->m_sCallId, client->m_cJobType, WorkQueItem::PROCTYPE::R_FREE_WORKER);
             search->setTxState(0);// client->m_TxState = 0;
             // std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -1078,10 +1141,12 @@ void VRClient::thrdTxProcess(VRClient* client) {
 
 		// 실시간의 경우 통화가 종료되기 전까지 Queue에서 입력 데이터를 받아 처리
 		// FILE인 경우 기존과 동일하게 filename을 전달하는 방법 이용
+#ifndef USE_ITF_DP
         if (client->m_nGearTimeout) {
             if ( !bOnlyRecord ) gearman_client_set_timeout(gearClient, client->m_nGearTimeout);
         }
-        
+#endif // USE_ITF_DP
+
 #if 0 // for DEBUG
 		std::string filename = client->m_pcm_path + "/" + client->m_sCallId + std::string("_") + std::to_string(client->m_nNumofChannel) + std::string(".pcm");
 		std::ofstream pcmFile;
@@ -1263,13 +1328,21 @@ void VRClient::thrdTxProcess(VRClient* client) {
                                 vBuff[i] = buf[i];
                             }
                             //client->m_Logger->debug("VRClient::thrdMain(%d, %d, %s)(%s) - send buffer buff_len(%lu), spos(%lu), epos(%lu)", nHeadLen, item->spkNo, buf, client->m_sCallId.c_str(), vBuff[item->spkNo-1].size(), client->tx_sframe[item->spkNo-1], client->tx_eframe[item->spkNo-1]);
+#ifdef USE_ITF_DP
+                            result_size = sttClient->requestJob((void*)&vBuff[0], vBuff.size());
+                            value = (void *)sttClient->getValue();
+                            aDianum++;
+
+                            if ( result_size > 0 )
+#else
                             value= gearman_client_do(gearClient, fname/*"vr_realtime"*/, NULL, 
                                                             (const void*)&vBuff[0], vBuff.size(),
                                                             &result_size, &rc);
-                                                            
+
                             aDianum++;
                             
                             if (gearman_success(rc))
+#endif // USE_ITF_DP                                                            
                             {
                                 // Make use of value
                                 if (value) {
@@ -1340,12 +1413,16 @@ void VRClient::thrdTxProcess(VRClient* client) {
                                     if (client->m_deliver) {
                                         client->m_deliver->insertSTT(client->m_sCallId, modValue, item->spkNo, client->tx_sframe/10, client->tx_eframe/10);
                                     }
-
+#ifndef USE_ITF_DP
                                     free(value);
-                                    
+#endif // USE_ITF_DP                                    
                                 }
                             }
-                            else if (gearman_failed(rc)){
+                            else 
+#ifndef USE_ITF_DP
+                            if (gearman_failed(rc))
+#endif // USE_ITF_DP
+                            {
                                 client->m_Logger->error("VRClient::thrdTxProcess(%s) - failed gearman_client_do(). [%lu : %lu], timeout(%d)", client->m_sCallId.c_str(), client->tx_sframe, client->tx_eframe, client->m_nGearTimeout);
                             }
                         }
@@ -1395,16 +1472,24 @@ void VRClient::thrdTxProcess(VRClient* client) {
                             vBuff.push_back(buf[i]);
                         }
                     }
+
+#ifdef USE_ITF_DP
+                    result_size = sttClient->requestJob((void*)&vBuff[0], vBuff.size());
+                    value = (void *)sttClient->getValue();
+
+                    if ( result_size > 0)
+#else
                     value= gearman_client_do(gearClient, fname/*"vr_realtime"*/, NULL, 
                                                     (const void*)&vBuff[0], vBuff.size(),
                                                     &result_size, &rc);
                     if (gearman_success(rc))
+#endif // USE_ITF_DP
                     {
                         std::string svalue = (const char*)value;
                         svr_nm = svalue.substr(0, svalue.find("\n"));
-
+#ifndef USE_ITF_DP
                         free(value);
-
+#endif // USE_ITF_DP
                         svalue.erase(0, svalue.find("\n")+1);
                         // Make use of value
                         if (svr_nm.size() && svalue.size()) {
@@ -1477,7 +1562,11 @@ void VRClient::thrdTxProcess(VRClient* client) {
                             
                         }
                     }
-                    else if (gearman_failed(rc)){
+                    else 
+#ifndef USE_ITF_DP
+                    if (gearman_failed(rc))
+#endif // USE_ITF_DP
+                    {
                         client->m_Logger->error("VRClient::thrdTxProcess(%s) - failed gearman_client_do(). [%d : %d], timeout(%d)", client->m_sCallId.c_str(), client->tx_sframe, client->tx_eframe, client->m_nGearTimeout);
                     }
 
@@ -1530,7 +1619,14 @@ void VRClient::thrdTxProcess(VRClient* client) {
 #endif
 	}
 
-    if ( !bOnlyRecord ) gearman_client_free(gearClient);
+    if ( !bOnlyRecord ) 
+    {
+#ifdef USE_ITF_DP
+        gDpBroker->restoreWorker(sttClient);
+#else
+        gearman_client_free(gearClient);
+#endif // USE_ITF_DP
+    }
 
 #ifdef USE_REDIS_POOL
     if ( useRedis )

@@ -58,11 +58,12 @@ public:
 private:
 	VFCManager(int geartimeout/*, log4cpp::Category *logger*/);
 	virtual ~VFCManager();
-
+#ifndef USE_ITF_DP
 	bool connectGearman();
     void disconnectGearman();
     size_t getWorkerCount();
 	size_t getWorkerCountFromString(std::string &gearResult);
+#endif // USE_ITF_DP
 	void setGearHost(string host) { m_sGearHost = host; }
 	void setGearPort(uint16_t port) { m_nGearPort = port; }
     void syncWorkerVFClient();

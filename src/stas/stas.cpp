@@ -42,6 +42,7 @@
 using namespace std;
 
 Configuration *config;
+ITF_DP_Broker *gDpBroker;
 
 volatile bool gRunning = true;
 
@@ -126,6 +127,15 @@ int main(int argc, const char** argv)
         logger->info("Database Name    :  %s", config->getConfig("database.name", "rt_stt").c_str());
         logger->info("Database CharSet :  %s", config->getConfig("database.chset", "utf8").c_str());
         
+#ifdef USE_ITF_DP
+    gDpBroker = ITF_DP_Broker::instance(7100);
+    if (!gDpBroker) {
+        logger->error("MAIN - ERROR (Failed to get DPBroker instance)");
+        delete config;
+        return -1;
+    }
+#endif
+
 #ifdef USE_REDIS_POOL
     // RedisHandler 활성화 옵션 체크
     if (!RedisHandler::instance()) {

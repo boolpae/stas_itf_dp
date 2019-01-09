@@ -2,7 +2,10 @@
 #include "stas.h"
 #include "VFClient.h"
 #include "VFCManager.h"
+
+#ifndef USE_ITF_DP
 #include "DivSpkManager.h"
+#endif
 
 #ifndef USE_ODBC
 #include "DBHandler.h"
@@ -11,7 +14,10 @@
 #endif
 
 #include "FileHandler.h"
+
+#ifndef USE_ITF_DP
 #include "VASDivSpeaker.h"
+#endif
 
 #include <thread>
 
@@ -45,11 +51,17 @@ void VFClient::startWork()
 
 void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
 {
+#ifdef USE_ITF_DP
+    string fname;
+    ITF_DP_Client *sttClient;
+    ITF_DP_Client *textClient;
+#else
     gearman_client_st *gearClient;
     gearman_return_t ret;
+    gearman_return_t rc;
+#endif
     void *value = NULL;
     size_t result_size;
-    gearman_return_t rc;
 
     char buf[256];
     int buflen=0;
@@ -75,7 +87,17 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
         return;
     }
 
-#if 1
+#ifdef USE_ITF_DP
+    fname = gDpBroker->reserveWorker(2);
+    if ( !fname.size() )
+    {
+        client->m_thrd.detach();
+        delete client;
+        return;
+    }
+
+    sttClient = gDpBroker->requestWorker(fname);
+#else
     gearClient = gearman_client_create(NULL);
     if (!gearClient) {
         //printf("\t[DEBUG] VRClient::thrdMain() - ERROR (Failed gearman_client_create - %s)\n", client->m_sCallId.c_str());
@@ -155,11 +177,19 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
             
             auto t1 = std::chrono::high_resolution_clock::now();
 #if 1
+
+#ifdef USE_ITF_DP
+            result_size = sttClient->requestJob((void*)reqFilePath.c_str(), reqFilePath.size());
+            value = (void *)sttClient->getValue();
+            if ( result_size>0 )
+#else
             // 1. Start STT : JOB_STT
             value= gearman_client_do(gearClient, "vr_stt", NULL, 
                                             (const void*)reqFilePath.c_str(), reqFilePath.size(),
                                             &result_size, &rc);
-            if (gearman_success(rc)) {
+            if (gearman_success(rc)) 
+#endif
+            {
                 // Make use of value
                 if (value) {
                     //std::string sValue((const char*)value);
@@ -176,7 +206,9 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                     5. 화자 분리 결과 처리
 #endif
 
+#ifndef USE_ITF_DP
                     free(value);
+#endif // USE_ITF_DP
 
 #ifdef USE_RAPIDJSON
                     {
@@ -217,7 +249,8 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                                     value= gearman_client_do(gearClient, "vr_text", NULL, 
                                                                     strbuf.GetString(), strbuf.GetLength(),
                                                                     &result_size, &rc);
-                                    if (gearman_success(rc)) {
+                                    if (gearman_success(rc)) 
+                                    {
                                         // Make use of value
                                         if (value) {
                                             uint32_t diaNumber=0;
@@ -275,7 +308,8 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                                         auto t2 = std::chrono::high_resolution_clock::now();
                                         DBHandler->updateTaskInfo(item->getCallId(), item->m_regdate, item->getRxTxType(), item->getCounselorCode(), 'Y', nFilesize, nFilesize/16000, std::chrono::duration_cast<std::chrono::seconds>(t2-t1).count(), item->m_procNo, item->getTableName().c_str());
                                     }
-                                    else if (gearman_failed(rc)) {
+                                    else if (gearman_failed(rc)) 
+                                    {
                                         logger->error("VFClient::thrdFunc(%ld) - failed gearman_client_do(vr_text). [%s : %s], timeout(%d)", client->m_nNumId, item->getCallId().c_str(), item->getFilename().c_str(), client->m_nGearTimeout);
                                         DBHandler->updateTaskInfo(item->getCallId(), item->m_regdate, item->getRxTxType(), item->getCounselorCode(), 'X', 0, 0, 0, item->m_procNo, item->getTableName().c_str(), "E20400"/*gearman_client_error(gearClient)*/);
                                     }
@@ -344,17 +378,35 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                             }
                         }
 
+#ifdef USE_ITF_DP
+                        while( 1 )
+                        {
+                            fname = gDpBroker->reserveWorker(3);
+                            if ( fname.size() ) break;
+                            std::this_thread::sleep_for(std::chrono::microseconds(10));
+                        }
+                        textClient = gDpBroker->requestWorker(fname);
+
+                        result_size = textClient->requestJob((void *)(rx.c_str()), rx.size());
+                        value = (void *)textClient->getValue();
+                        gDpBroker->restoreWorker(textClient);
+                        if ( result_size>0 )
+#else
                         value= gearman_client_do(gearClient, "vr_text", NULL, 
                                                         (const void*)(rx.c_str()), rx.size(),
                                                         &result_size, &rc);
-                        if (gearman_success(rc)) {
+                        if (gearman_success(rc)) 
+#endif
+                        {
                             sValue = (const char*)value;
                             if (sValue[0] == 'E') {
                                 err_code = sValue.substr(0, sValue.find("\n"));
                                 svr_name = sValue.substr(sValue.find("\n")+1);
                                 logger->error("VFClient::thrdFunc(%ld) - failed gearman_client_do(vr_text_rx). [%s : %s], ERROR-CODE(%s)", client->m_nNumId, item->getCallId().c_str(), item->getFilename().c_str(), err_code.c_str());
                                 DBHandler->updateTaskInfo(item->getCallId(), item->m_regdate, item->getRxTxType(), item->getCounselorCode(), 'X', 0, 0, 0, item->m_procNo, item->getTableName().c_str(), err_code.c_str(), svr_name.c_str());
+#ifndef USE_ITF_DP
                                 free(value);
+#endif
                             }
                             else {
                                 nPos1 = 0;
@@ -367,20 +419,41 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
 
                                 if (value) {
                                     rx_unseg = sValue.substr(nPos2);//(const char*)value;
+#ifndef USE_ITF_DP
                                     free(value);
+#endif // USE_ITF_DP
                                 }
 
+#ifdef USE_ITF_DP
+                                // while( (fname = gDpBroker->reserveWorker(3)) && !fname.size() );
+                                while( 1 )
+                                {
+                                    fname = gDpBroker->reserveWorker(3);
+                                    if ( fname.size() ) break;
+                                    std::this_thread::sleep_for(std::chrono::microseconds(10));
+                                }
+                                textClient = gDpBroker->requestWorker(fname);
+
+                                result_size = textClient->requestJob((void*)(tx.c_str()), tx.size());
+                                value = (void *)textClient->getValue();
+                                gDpBroker->restoreWorker(textClient);
+                                if ( result_size>0 )
+#else
                                 value= gearman_client_do(gearClient, "vr_text", NULL, 
                                                                 (const void*)(tx.c_str()), tx.size(),
                                                                 &result_size, &rc);
-                                if (gearman_success(rc)) {
+                                if (gearman_success(rc)) 
+#endif
+                                {
                                     sValue = (const char*)value;
                                     if (sValue[0] == 'E') {
                                         err_code = sValue.substr(0, sValue.find("\n"));
                                         svr_name = sValue.substr(sValue.find("\n")+1);
                                         logger->error("VFClient::thrdFunc(%ld) - failed gearman_client_do(vr_text_tx). [%s : %s], ERROR-CODE(%s)", client->m_nNumId, item->getCallId().c_str(), item->getFilename().c_str(), err_code.c_str());
                                         DBHandler->updateTaskInfo(item->getCallId(), item->m_regdate, item->getRxTxType(), item->getCounselorCode(), 'X', 0, 0, 0, item->m_procNo, item->getTableName().c_str(), err_code.c_str(), svr_name.c_str());
+#ifndef USE_ITF_DP
                                         free(value);
+#endif // USE_ITF_DP
                                     }
                                     else {
                                         nPos1 = 0;
@@ -393,7 +466,9 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
 
                                         if (value) {
                                             tx_unseg = sValue.substr(nPos2);//(const char*)value;
+#ifndef USE_ITF_DP
                                             free(value);
+#endif // USE_ITF_DP
                                         }
 
                                         {
@@ -516,18 +591,38 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                             }
                         }
 
+#ifdef USE_ITF_DP
+                        // while( (fname = gDpBroker->reserveWorker(3)) && !fname.size() );
+                        while( 1 )
+                        {
+                            fname = gDpBroker->reserveWorker(3);
+                            if ( fname.size() ) break;
+                            std::this_thread::sleep_for(std::chrono::microseconds(10));
+                        }
+                        textClient = gDpBroker->requestWorker(fname);
+
+                        result_size = textClient->requestJob((void *)(sValue.c_str() + nPos1), strlen(sValue.c_str() + nPos1));
+                        value = (void *)textClient->getValue();
+                        gDpBroker->restoreWorker(textClient);
+                        if ( result_size>0 )
+#else
+
                         // 2. Unsegment! : JOB_UNSEGMENT
                         value= gearman_client_do(gearClient, "vr_text", NULL, 
                                                         (const void*)(sValue.c_str() + nPos1), strlen(sValue.c_str() + nPos1),
                                                         &result_size, &rc);
-                        if (gearman_success(rc)) {
+                        if (gearman_success(rc)) 
+#endif // USE_ITF_DP
+                        {
                             sValue = (const char*)value;
                             if (sValue[0] == 'E') {
                                 err_code = sValue.substr(0, sValue.find("\n"));
                                 svr_name = sValue.substr(sValue.find("\n")+1);
                                 logger->error("VFClient::thrdFunc(%ld) - failed gearman_client_do(vr_text). [%s : %s], ERROR-CODE(%s)", client->m_nNumId, item->getCallId().c_str(), item->getFilename().c_str(), err_code.c_str());
                                 DBHandler->updateTaskInfo(item->getCallId(), item->m_regdate, item->getRxTxType(), item->getCounselorCode(), 'X', 0, 0, 0, item->m_procNo, item->getTableName().c_str(), err_code.c_str(), svr_name.c_str());
+#ifndef USE_ITF_DP
                                 free(value);
+#endif // USE_ITF_DP
                             }
                             else {
                                 nPos1 = 0;
@@ -542,9 +637,9 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                                     uint32_t diaNumber=0;
                                     uint8_t spkno=0;
                                     std::string strValue(sValue.substr(nPos2));//((const char*)value);
-
+#ifndef USE_ITF_DP
                                     free(value);
-
+#endif // USE_ITF_DP
                                     //std::cout << "STT RESULT <<\n" << (const char*)value << "\n>>" << std::endl;
         #ifdef CODE_EXAM_SECTION
                                     while(std::getline(iss, line)) {
@@ -594,14 +689,14 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                                             }
                                         }
                                     }
-
+#ifndef USE_ITF_DP
                                     if (sFuncName.size()) {
                                         VASDivSpeaker divspk(DBHandler, FileHandler, item);
 
                                         //startWork(gearman_client_st *gearClient, std::string &funcname, std::string &unseg);
                                         divspk.startWork(gearClient, sFuncName, strValue);
                                     }
-
+#endif // USE_ITF_DP
                                     // DBHandler에서 처리할 수 있도록... VRClient와 동일하게?
                                     // 그럼... 전체 STT결과 처리는?
 
@@ -611,7 +706,11 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                                 DBHandler->updateTaskInfo(item->getCallId(), item->m_regdate, item->getRxTxType(), item->getCounselorCode(), 'Y', nFilesize, nFilesize/16000, std::chrono::duration_cast<std::chrono::seconds>(t2-t1).count(), item->m_procNo, item->getTableName().c_str(), "", svr_name.c_str());
                             }
                         }
-                        else if (gearman_failed(rc)) {
+                        else 
+#ifndef USE_ITF_DP
+                        if (gearman_failed(rc)) 
+#endif
+                        {
                             logger->error("VFClient::thrdFunc(%ld) - failed gearman_client_do(vr_text). [%s : %s], timeout(%d)", client->m_nNumId, item->getCallId().c_str(), item->getFilename().c_str(), client->m_nGearTimeout);
                             DBHandler->updateTaskInfo(item->getCallId(), item->m_regdate, item->getRxTxType(), item->getCounselorCode(), 'X', 0, 0, 0, item->m_procNo, item->getTableName().c_str(), "E20400"/*gearman_client_error(gearClient)*/);
                         }
@@ -624,7 +723,7 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
                 }
             }
             else {
-                logger->error("VFClient::thrdFunc(%ld) - failed gearman_client_do(vr_stt). [%s : %s], timeout(%d), gearman_error_msg(%s)", client->m_nNumId, item->getCallId().c_str(), item->getFilename().c_str(), client->m_nGearTimeout, gearman_client_error(gearClient));
+                logger->error("VFClient::thrdFunc(%ld) - failed gearman_client_do(vr_stt). [%s : %s], timeout(%d), gearman_error_msg(%s)", client->m_nNumId, item->getCallId().c_str(), item->getFilename().c_str(), client->m_nGearTimeout, "E20400"/*gearman_client_error(gearClient)*/);
                 DBHandler->updateTaskInfo(item->getCallId(), item->m_regdate, item->getRxTxType(), item->getCounselorCode(), 'X', 0, 0, 0, item->m_procNo, item->getTableName().c_str(), "E20400"/*gearman_client_error(gearClient)*/);
             }
 #else
@@ -713,11 +812,14 @@ void VFClient::thrdFunc(VFCManager* mgr, VFClient* client)
         }
         //logger->debug("VFClient::thrdFunc() working...");
     }
-#if 1
+#ifdef USE_ITF_DP
+    gDpBroker->restoreWorker(sttClient);
+#else
     gearman_client_free(gearClient);
-#endif
+#endif // USE_ITF_DP
 }
 
+#ifndef USE_ITF_DP
 bool VFClient::requestGearman(gearman_client_st *gearClient, const char* funcname, const char*reqValue, size_t reqLen, std::string &resStr)
 {
     bool ret = false;
@@ -740,3 +842,4 @@ bool VFClient::requestGearman(gearman_client_st *gearClient, const char* funcnam
 
     return ret;
 }
+#endif // USE_ITF_DP

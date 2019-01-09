@@ -47,6 +47,8 @@ VFCManager::~VFCManager()
     m_Logger->debug("VFCManager Destructed.");
 }
 
+#ifndef USE_ITF_DP
+
 bool VFCManager::connectGearman()
 {
 	struct sockaddr_in addr;
@@ -194,6 +196,8 @@ size_t VFCManager::getWorkerCountFromString(std::string & gearResult)
 
 }
 
+#endif // USE_ITF_DP
+
 VFCManager* VFCManager::instance(const std::string gearHostIp, const uint16_t gearHostPort, int geartimeout/*, log4cpp::Category *logger*/)
 {
 	if (m_instance) return m_instance;
@@ -263,8 +267,10 @@ JobInfoItem* VFCManager::popItem()//std::string& line)
 
 void VFCManager::thrdFuncVFCManager(VFCManager* mgr)
 {
+#ifndef USE_ITF_DP
     mgr->connectGearman();
-    
+#endif // USE_ITF_DP
+
     while(1) {
         // gearman 호스트에 접속 후 file을 처리할 worker의 갯수 파악
         // 파악된 worker의 갯수 만큼 VFClient 생성 후 테이블로 관리
@@ -273,14 +279,20 @@ void VFCManager::thrdFuncVFCManager(VFCManager* mgr)
         
         std::this_thread::sleep_for(std::chrono::seconds(30));
     }
-    
+
+#ifndef USE_ITF_DP
     mgr->disconnectGearman();
+#endif // USE_ITF_DP
 }
 
 void VFCManager::syncWorkerVFClient()
 {
     char szKey[20];
+#ifdef USE_ITF_DP
+    size_t workerCnt = gDpBroker->getWorkerCount(2);
+#else
     size_t workerCnt = getWorkerCount();
+#endif
     
     m_Logger->debug("VFCManager::syncWorkerVFClient() - worker_count(%d), table_size(%d)", workerCnt, m_mWorkerTable.size());
     

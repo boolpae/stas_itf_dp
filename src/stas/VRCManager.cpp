@@ -55,13 +55,17 @@ VRCManager::VRCManager(int geartimeout, FileHandler *deliver, /*log4cpp::Categor
 
 VRCManager::~VRCManager()
 {
+#ifndef USE_ITF_DP
     disconnectGearman();
+#endif // USE_ITF_DP
+
 	removeAllVRC();
 
 	//printf("\t[DEBUG] VRCManager Destructed.\n");
     m_Logger->debug("VRCManager Destructed.");
 }
 
+#ifndef USE_ITF_DP
 bool VRCManager::connectGearman()
 {
 	struct sockaddr_in addr;
@@ -98,6 +102,7 @@ void VRCManager::disconnectGearman()
         m_nSockGearman = 0;
 	}
 }
+
 
 #define RECV_BUFF_LEN 512
 bool VRCManager::getGearmanFnames(std::vector<std::string> &vFnames)
@@ -258,6 +263,8 @@ void VRCManager::getFnamesFromString4MT(std::string & gearResult, std::vector<st
 
 }
 
+#endif // USE_ITF_DP
+
 VRCManager* VRCManager::instance(const std::string gearHostIp, const uint16_t gearHostPort, int geartimeout, FileHandler *deliver, /*log4cpp::Category *logger,*/ DBHandler* s2d, bool is_save_pcm, string pcm_path, size_t framelen, int mode)
 {
 	if (ms_instance) return ms_instance;
@@ -268,6 +275,7 @@ VRCManager* VRCManager::instance(const std::string gearHostIp, const uint16_t ge
 	ms_instance->setGearHost(gearHostIp);//);("192.168.229.135")
 	ms_instance->setGearPort(gearHostPort);
     
+#ifndef USE_ITF_DP
 #ifndef CONN_GEARMAN_PER_CALL   // 항시 연결인 경우 사용
     if (!ms_instance->connectGearman()) {
         //printf("\t[DEBUG] RCManager::instance() - ERROR (Failed to connect gearhost)\n");
@@ -277,6 +285,7 @@ VRCManager* VRCManager::instance(const std::string gearHostIp, const uint16_t ge
         ms_instance = NULL;
     }
 #endif
+#endif // USE_ITF_DP
 
 	return ms_instance;
 }
@@ -294,6 +303,32 @@ int16_t VRCManager::requestVRC(string& callid, string& counselcode, time_t &star
 {
 	int16_t res = 0;
 	VRClient* client;
+
+#ifdef USE_ITF_DP
+	std::lock_guard<std::mutex> g(m_mxQue);
+
+
+	string fname = gDpBroker->reserveWorker(0);
+	if ( fname.size() )
+	{
+		startT = time(NULL);
+		client = new VRClient(ms_instance, this->m_sGearHost, this->m_nGearPort, this->m_GearTimeout, fname/**iter*/, callid, counselcode, jobType, noc, m_deliver, /*m_Logger,*/ m_s2d, m_is_save_pcm, m_pcm_path, m_framelen, m_mode, startT); // or VRClient(this);
+
+		if (client) {
+			std::lock_guard<std::mutex> g(m_mxMap);
+			m_mWorkerTable[fname] = client;
+		}
+		else {
+			res = 1;	// 실시간 STT 처리를 위한 VRClient 인스턴스 생성에 실패
+		}
+	}
+	else {
+		res = 2;	// 실시간 STT 처리를 위한 가용한 worker가 없음
+	}
+
+	return res;
+
+#else
 	vector< string > vFnames;
 	vector< string >::iterator iter;
 
@@ -338,6 +373,8 @@ int16_t VRCManager::requestVRC(string& callid, string& counselcode, time_t &star
 		res = 2;	// 실시간 STT 처리를 위한 가용한 worker가 없음
 	}
 
+#endif
+
 	return res;
 }
 
@@ -379,15 +416,15 @@ void VRCManager::outputVRCStat()
 {
 	//VRClient* client = NULL;
 	map< string, VRClient* >::iterator iter;
+    
+    if ( m_mWorkerTable.size() )
+        m_Logger->info("VRCManager::outputVRCStat() - Current working VRClient count(%d)", m_mWorkerTable.size());
 
 	for (iter = m_mWorkerTable.begin(); iter != m_mWorkerTable.end(); iter++) {
 		//client = (VRClient*)iter->second;
 		//printf("\t[DEBUG] VRCManager::outputVRCStat() - VRClient(%s)\n", iter->first.c_str());
         m_Logger->debug("VRCManager::outputVRCStat() - VRClient(%s, %s)", iter->first.c_str(), iter->second->getCallId().c_str());
 	}
-    
-    if ( m_mWorkerTable.size() )
-        m_Logger->info("VRCManager::outputVRCStat() - Current working VRClient count(%d)", m_mWorkerTable.size());
 
 }
 

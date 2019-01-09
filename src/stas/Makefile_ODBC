@@ -62,6 +62,10 @@ FLAGS			+= -DCHANNEL_SYNC # 두 화자 간의 음성 데이터 처리 속도를 
 endif
 endif
 
+ifeq ($(USE_ITF_DP), "TRUE")
+FLAGS			+= -DUSE_ITF_DP
+endif
+
 FLAGS			+= -DUSE_UPDATE_POOL # Update Task 시 전용 thread를 이용하는 방법을 이용 
 
 SHARED_LIBS		:= -lboost_program_options -lboost_filesystem -lboost_system

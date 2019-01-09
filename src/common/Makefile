@@ -7,7 +7,9 @@ endif
 
 ###############################################################################
 VERSION			:= 0.1.0
-SOURCE			:= configuration.cpp
+SOURCE			:= configuration.cpp \
+				ItfDpBroker.cpp \
+				ItfDpWorker.cpp
 INCLUDE_PATH	:= include
 LIBRARIES		:= 
 FLAGS			:= 

@@ -5,13 +5,17 @@
 #include <thread>
 #include <stdint.h>
 
+
+#ifndef USE_ITF_DP
 // For Gearman
 #include <libgearman/gearman.h>
+#endif
 
 class VFCManager;
 
 class VFClient {
 public:
+
     VFClient(VFCManager* mgr, std::string gearHost, uint16_t gearPort, int gearTimeout, uint64_t numId, bool bMakeMLF, std::string resultpath);
     virtual ~VFClient();
     
@@ -20,9 +24,9 @@ public:
 
 private:
     static void thrdFunc(VFCManager* mgr, VFClient* clt);
-
+#ifndef USE_ITF_DP
     bool requestGearman(gearman_client_st *gearman, const char* funcname, const char*reqValue, size_t reqLen, std::string &resStr);
-
+#endif
 private:
     std::thread m_thrd;
     

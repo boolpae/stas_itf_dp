@@ -16,7 +16,7 @@
  * V 0.1 : 데모용 버전 개발 완료, 정식 이름 결정
  */
 #include "configuration.h"
-
+#include "ItfDpBroker.h"
 
 #define STAS_VERSION_MAJ 0
 #define STAS_VERSION_MIN 8
@@ -26,5 +26,6 @@ using namespace itfact::common;
 
 
 extern Configuration *config;
+extern ITF_DP_Broker *gDpBroker;
 
 #endif // _STAS_H_
